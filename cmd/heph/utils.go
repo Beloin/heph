@@ -11,10 +11,11 @@ func ValidArgsFunctionTargets(cmd *cobra.Command, args []string, toComplete stri
 	}
 
 	directive := cobra.ShellCompDirectiveNoFileComp
-	isFuzzy, suggestions := autocompleteTargetName(targets, toComplete)
-	if isFuzzy {
-		directive |= cobra.ShellCompDirectiveNoMatching
-	}
+	// TODO: bsena; Test this
+	_, suggestions := autocompleteTargetName(targets, toComplete)
+	// if isFuzzy {
+	// 	directive |= cobra.ShellCompDirectiveError
+	// }
 
 	return suggestions, directive
 }
@@ -26,10 +27,11 @@ func ValidArgsFunctionLabelsOrTargets(cmd *cobra.Command, args []string, toCompl
 	}
 
 	directive := cobra.ShellCompDirectiveNoFileComp
-	isFuzzy, suggestions := autocompleteLabelOrTarget(targets, labels, toComplete)
-	if isFuzzy {
-		directive |= cobra.ShellCompDirectiveNoMatching
-	}
+	// TODO: bsena; Test this
+	_, suggestions := autocompleteLabelOrTarget(targets, labels, toComplete)
+	// if isFuzzy {
+	// 	directive |= cobra.ShellCompDirectiveError
+	// }
 
 	return suggestions, directive
 }
