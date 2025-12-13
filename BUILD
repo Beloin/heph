@@ -2,6 +2,14 @@ load("//backend/go", "go_toolchain")
 load("//backend/node", "node_toolchain")
 load("//backend/node", "yarn_toolchain")
 
+def hello():
+  """
+  My Weird documentation
+  """
+  pass
+
+hello()
+
 go_toolchain(
     name = "go",
     version = "1.24.1",
