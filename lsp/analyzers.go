@@ -3,11 +3,11 @@ package lsp
 import (
 	"context"
 	"embed"
-	"fmt"
 	"io"
 	"io/fs"
 	"path/filepath"
 
+	"github.com/hephbuild/heph/hroot"
 	"github.com/hephbuild/heph/vfssimple"
 	"github.com/tilt-dev/starlark-lsp/pkg/analysis"
 )
@@ -18,11 +18,10 @@ var builtins embed.FS
 // TODO: bsena; How to implement custom request?
 // Search for custom protocol.Registration and jow starlark-lsp uses this
 
-func customAnalyzer(ctx context.Context) (*analysis.Analyzer, error) {
-	// Maybe use vfssimple
-	// vfssimple.NewFile("starlark-builtins")
-	// TODO: bsena; get root path
-	tmpDir := "file://heph-builtin"
+func customAnalyzer(ctx context.Context, root *hroot.State) (*analysis.Analyzer, error) {
+	// TODO: bsena; This UGLY implementation is required since starlark-lsp does not loads embed.FS
+	// and their API is weird
+	builtinPath := root.Home.Join("heph-builtins")
 	paths := []string{}
 
 	err := fs.WalkDir(builtins, ".", func(path string, d fs.DirEntry, err error) error {
@@ -34,8 +33,8 @@ func customAnalyzer(ctx context.Context) (*analysis.Analyzer, error) {
 			return nil
 		}
 
-		fullPath := filepath.Join(tmpDir, path)
-		dst, err := vfssimple.NewLocation(fullPath)
+		fullPath := filepath.Join(builtinPath.Abs(), path)
+		dst, err := vfssimple.NewFile("file://" + fullPath)
 		if err != nil {
 			return err
 		}
@@ -53,13 +52,12 @@ func customAnalyzer(ctx context.Context) (*analysis.Analyzer, error) {
 		}
 
 		paths = append(paths, dst.Path())
+
 		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
-
-	fmt.Printf("paths: %+v\n", paths) // Debugging only
 
 	builtinAnalyzerOption := func() analysis.AnalyzerOption {
 		return analysis.WithBuiltinPaths(paths)

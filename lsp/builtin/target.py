@@ -5,7 +5,7 @@ def target(
     name: str,
     doc: str = None,
     run: Union[str, List[str]] = [],
-    entrypoint: Literal['bash', 'sh', 'exec'] = 'bash',
+    entrypoint: Literal["bash", "sh", "exec"] = "bash",
     run_in_cwd: bool = False,
     pass_args: bool = False,
     cache: Union[bool, Any] = True,
@@ -13,7 +13,7 @@ def target(
     sandbox: bool = True,
     out_in_sandbox: bool = False,
     gen: bool = False,
-    codegen: Optional[Literal['link', 'copy']] = None,
+    codegen: Optional[Literal["link", "copy"]] = None,
     deps: Union[str, List[str], dict] = [],
     hash_deps: Union[str, List[str], dict] = [],
     runtime_deps: Union[str, List[str], dict] = [],
@@ -22,18 +22,18 @@ def target(
     out: Union[str, List[str], dict] = [],
     env: dict = {},
     pass_env: List[str] = [],
-    src_env: Literal['ignore', 'rel_root', 'rel_pkg', 'abs'] = 'rel_pkg',
-    out_env: Literal['ignore', 'rel_root', 'rel_pkg', 'abs'] = 'rel_pkg',
-    hash_file: Literal['content', 'mod_time'] = 'content',
+    src_env: Literal["ignore", "rel_root", "rel_pkg", "abs"] = "rel_pkg",
+    out_env: Literal["ignore", "rel_root", "rel_pkg", "abs"] = "rel_pkg",
+    hash_file: Literal["content", "mod_time"] = "content",
     transitive: Any = None,
-    timeout: str = None
+    timeout: str = None,
 ):
     """Define a target for execution in the heph build system.
-    
+
     A target is defined by a name, a set of commands to run, a set of inputs and outputs
     and environment variables. This execution unit is isolated from the rest of the repo
     which allows for efficient caching and parallel execution.
-    
+
     Args:
         name (str): Target name (required)
         doc (str, optional): Documentation for the target

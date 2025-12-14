@@ -7,6 +7,7 @@ import (
 	"os"
 	"sync"
 
+	"github.com/hephbuild/heph/hroot"
 	"github.com/tilt-dev/starlark-lsp/pkg/document"
 	"github.com/tilt-dev/starlark-lsp/pkg/server"
 	"go.lsp.dev/jsonrpc2"
@@ -53,7 +54,7 @@ func (s *stdioServer) Close(ctx context.Context) error {
 	return s.skServer.Exit(ctx)
 }
 
-func NewStdioServer(ctx context.Context) (LSPServer, error) {
+func NewStdioServer(ctx context.Context, root *hroot.State) (LSPServer, error) {
 	// TODO: bsena; use cobra's stdin and stdout
 	stdio := struct {
 		io.ReadCloser
@@ -68,7 +69,7 @@ func NewStdioServer(ctx context.Context) (LSPServer, error) {
 
 	docManager := document.NewDocumentManager()
 
-	analyzer, err := customAnalyzer(ctx)
+	analyzer, err := customAnalyzer(ctx, root)
 	if err != nil {
 		return nil, err
 	}
