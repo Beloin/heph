@@ -15,7 +15,7 @@ import (
 
 type LSPServer interface {
 	Serve(ctx context.Context) error
-	Close(ctx context.Context)
+	Close(ctx context.Context) error
 }
 
 type stdioServer struct {
@@ -28,9 +28,9 @@ type stdioServer struct {
 	_ [0]sync.Mutex
 }
 
+// Serve blocks current goroutine accepting LSP requests
 func (s *stdioServer) Serve(ctx context.Context) error {
 	h := s.skServer.Handler(server.StandardMiddleware...)
-
 	s.jsonConn.Go(ctx, h)
 
 	select {
@@ -49,8 +49,8 @@ func (s *stdioServer) Serve(ctx context.Context) error {
 	return nil
 }
 
-func (s *stdioServer) Close(ctx context.Context) {
-	s.skServer.Exit(ctx)
+func (s *stdioServer) Close(ctx context.Context) error {
+	return s.skServer.Exit(ctx)
 }
 
 func NewStdioServer(ctx context.Context) (LSPServer, error) {
@@ -93,8 +93,7 @@ func createJSONRPC(conn io.ReadWriteCloser) jsonrpc2.Conn {
 }
 
 func createClient(ctx context.Context, jsonConn jsonrpc2.Conn) protocol.Client {
-	// TODO: bsena; I am not happy that it forces the zap logger usage.
-	// Maybe use the core stuff?
+	// TODO: I am not happy that it forces the zap logger usage
 	logger := protocol.LoggerFromContext(ctx)
 	return protocol.ClientDispatcher(jsonConn, logger.Named("notify"))
 }

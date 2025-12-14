@@ -24,6 +24,7 @@ var lspCommand = &cobra.Command{
 var servelspCmd = &cobra.Command{
 	Use:   "serve",
 	Short: "Serve LSP",
+	Aliases:           []string{"s"},
 	// Args:              cobra.ExactArgs(1), // TODO: bsena; Add stdin vs address
 	ValidArgsFunction: ValidArgsFunctionTargets,
 	RunE: func(cmd *cobra.Command, args []string) error {
