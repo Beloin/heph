@@ -15,15 +15,28 @@ import (
 //go:embed builtin
 var builtins embed.FS
 
-// TODO: bsena; How to implement custom request?
-// Search for custom protocol.Registration and jow starlark-lsp uses this
-
 func customAnalyzer(ctx context.Context, root *hroot.State) (*analysis.Analyzer, error) {
-	// TODO: bsena; This UGLY implementation is required since starlark-lsp does not loads embed.FS
-	// and their API is weird
+	paths, err := extractTemporaryPaths(root)
+	if err != nil {
+		return nil, err
+	}
+
+	builtinAnalyzerOption := func() analysis.AnalyzerOption {
+		return analysis.WithBuiltinPaths(paths)
+	}
+
+	opts := []analysis.AnalyzerOption{
+		analysis.WithStarlarkBuiltins(),
+		builtinAnalyzerOption(),
+	}
+
+	return analysis.NewAnalyzer(ctx, opts...)
+}
+
+func extractTemporaryPaths(root *hroot.State) ([]string, error) {
+	// This UGLY implementation is required since starlark-lsp does not loads embed.FS and their API is weird
 	builtinPath := root.Home.Join("heph-builtins")
 	paths := []string{}
-
 	err := fs.WalkDir(builtins, ".", func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -59,14 +72,5 @@ func customAnalyzer(ctx context.Context, root *hroot.State) (*analysis.Analyzer,
 		return nil, err
 	}
 
-	builtinAnalyzerOption := func() analysis.AnalyzerOption {
-		return analysis.WithBuiltinPaths(paths)
-	}
-
-	opts := []analysis.AnalyzerOption{
-		analysis.WithStarlarkBuiltins(),
-		builtinAnalyzerOption(),
-	}
-
-	return analysis.NewAnalyzer(ctx, opts...)
+	return paths, nil
 }
