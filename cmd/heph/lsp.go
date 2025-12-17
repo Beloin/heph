@@ -38,7 +38,7 @@ var servelspCmd = &cobra.Command{
 			return err
 		}
 	
-		server, err := lsp.NewStdioServer(ctx, bs.Root)
+		server, err := lsp.NewHephServer(bs.Root)
 		if err != nil {
 			return err
 		}
