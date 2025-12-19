@@ -2,7 +2,6 @@ package runtime_test
 
 import (
 	_ "embed"
-	"fmt"
 	"testing"
 
 	"github.com/hephbuild/heph/lsp/runtime"
@@ -38,13 +37,24 @@ func (suite *TraverseSuite) TestPyMachine() {
 	parser := suite.newParser()
 	targetTree := parser.Parse(pythonTest, nil)
 
-	// machine := runtime.NewMachine()
-	// state := machine.Start()
+	functionName := ""
+	machine := runtime.NewMachine()
+	state := machine.Start()
 	runtime.Traverse(targetTree, func(node *tree_sitter.Node) bool {
-		kind := node.Kind()
-		fmt.Println("kind: ", kind)
+		state = state(node.Kind())
+
+		if machine.HasSymbol {
+			start, end := node.ByteRange()
+			v := pythonTest[start:end]
+			functionName = string(v)
+
+			return false
+		}
+
 		return true
 	})
+
+	suite.Require().Equal("my_custom_function", functionName)
 }
 
 func TestTraverseSuite(t *testing.T) {
