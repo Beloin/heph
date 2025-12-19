@@ -26,6 +26,8 @@ var (
 // protocol.TextDocumentDidSaveFunc
 // protocol.TextDocumentDidCloseFunc
 
+// TODO: bsena; split this better so we can test it
+
 func TextDocumentDidOpenWrapper(manager *runtime.Manager) protocol.TextDocumentDidOpenFunc {
 	logger := commonlog.GetLogger("sync")
 	return func(context *glsp.Context, params *protocol.DidOpenTextDocumentParams) error {

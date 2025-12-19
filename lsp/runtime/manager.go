@@ -18,6 +18,7 @@ type Manager struct {
 }
 
 func NewManager(parser *tree_sitter.Parser) *Manager {
+	parseBuiltins(parser)
 	return &Manager{DocumentMap: map[protocol.DocumentUri]*docTuple{}, Parser: parser}
 }
 
