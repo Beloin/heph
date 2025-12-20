@@ -8,7 +8,7 @@ import (
 // TODO: bsena; implement something like this
 // Think about how we will have multiple documents
 type Document struct {
-	Symbols []*protocol.DocumentSymbol
+	Symbols []*protocol.DocumentSymbol // TODO: bsena; we probalby will need to wrap this in our own type to handle docs etc
 	Tree    *tree_sitter.Tree
 }
 
@@ -24,6 +24,7 @@ func NewDocument(tree *tree_sitter.Tree) *Document {
 	// doc.functions = query.Functions(doc, tree.RootNode())
 	// doc.symbols = query.DocumentSymbols(doc)
 	// doc.parseLoadStatements()
+	// see builtin function, there I implemented a load function, so we should get that and put elsewhere
 	return doc
 }
 

@@ -14,6 +14,9 @@ import (
 //go:embed testdata/test.py
 var pythonTest []byte
 
+//go:embed builtin/target.py
+var targetTest []byte
+
 var pythonNames = []string{"my_custom_function", "my_custom_variable", "my_custom_result"}
 
 type TraverseSuite struct {
@@ -36,8 +39,7 @@ func (suite *TraverseSuite) TestPySimpleFile() {
 	suite.Require().NotNil(targetTree)
 }
 
-// TODO: bsena; After all our tests, remove this logs
-func (suite *TraverseSuite) TestPyMachine() {
+func (suite *TraverseSuite) TestPyFirstFunction() {
 	parser := suite.newParser()
 	targetTree := parser.Parse(pythonTest, nil)
 
@@ -46,16 +48,9 @@ func (suite *TraverseSuite) TestPyMachine() {
 	state := machine.Start()
 	runtime.Traverse(targetTree, func(node *tree_sitter.Node) bool {
 		state = state(node)
-		// fmt.Println(node.Kind())
-
-		if machine.HasSymbol {
-			fmt.Printf("Custom Type: %s, Name: %s, Value: %s\n", machine.TSSymbolKind, machine.SymbolName, machine.SymbolValue)
-		}
-
 		if machine.HasSymbol && machine.IsFunction {
 			functionName = machine.SymbolName
-
-			// return false
+			return false
 		}
 
 		return true
@@ -83,6 +78,45 @@ func (suite *TraverseSuite) TestPyNames() {
 	})
 
 	suite.Require().ElementsMatch(pythonNames, names)
+}
+
+func (suite *TraverseSuite) TestPrintKinds() {
+	parser := suite.newParser()
+	targetTree := parser.Parse(pythonTest, nil)
+
+	runtime.Traverse(targetTree, func(node *tree_sitter.Node) bool {
+		fmt.Println(node.Kind())
+
+		return true
+	})
+}
+
+func (suite *TraverseSuite) TestPrintTargetKinds() {
+	parser := suite.newParser()
+	targetTree := parser.Parse(targetTest, nil)
+
+	runtime.Traverse(targetTree, func(node *tree_sitter.Node) bool {
+		fmt.Println(node.Kind())
+
+		return true
+	})
+}
+
+func (suite *TraverseSuite) TestPrintNames() {
+	parser := suite.newParser()
+	targetTree := parser.Parse(pythonTest, nil)
+
+	machine := runtime.NewMachine(pythonTest)
+	state := machine.Start()
+
+	runtime.Traverse(targetTree, func(node *tree_sitter.Node) bool {
+		state = state(node)
+		if machine.HasSymbol {
+			fmt.Printf("Name: %s, Kind: %s, Value: %s - Pos: %+v\n", machine.SymbolName, machine.TSSymbolKind, machine.SymbolValue, machine.SymbolPosition)
+		}
+
+		return true
+	})
 }
 
 func TestTraverseSuite(t *testing.T) {

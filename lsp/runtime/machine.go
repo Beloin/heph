@@ -5,22 +5,16 @@ import tree_sitter "github.com/tree-sitter/go-tree-sitter"
 // TODO: bsena; Push to state machine
 
 const (
-	StateIdle               = "idle"
-	StateFunction           = "function definition"
-	StateFunctionIdentifier = "function definition"
-
-	StateAssigment  = "Assignment"
-	StateStatement  = "Statement"
-	StateType       = "Type"
-	StateTypeString = "TypeString"
-)
-
-const (
 	// Function tokens
-	FunctionToken       = "function_definition"
-	DefToken            = "def"
-	ParametersToken     = "parameters"
-	TypedParameterToken = "typed_parameter"
+	FunctionToken              = "function_definition"
+	DefToken                   = "def"
+	ParametersToken            = "parameters"
+	DefaultParameterToken      = "default_parameter"
+	TypeParamaterToken         = "type_parameter"
+	TypedParameterToken        = "typed_parameter"
+	TypedDefaultParameterToken = "typed_default_parameter"
+
+	GenericTypeToken = "generic_type"
 
 	StatementToken  = "expression_statement"
 	AssignmentToken = "assignment"
@@ -34,19 +28,44 @@ const (
 	StringTypeToken    = "string"
 	StringStartToken   = "string_start"
 	StringContentToken = "string_content"
-	StringStopToken    = "string_stop"
+	StringEndToken    = "string_end"
 
 	IntTypeToken   = "int"
 	FloatTypeToken = "float"
+	ListTypeToken  = "list"
+	DictTypeToken  = "dictionary"
+	NoneTypeToken  = "none"
 
 	// Literal Tokens
-	EqualToken              = "="
-	LiteralOpenParenthesis  = "("
-	LiteralCloseParenthesis = ")"
-	LiteralColon            = ":"
-	LiteralArrowType        = "->"
-	LiteralComma            = ","
+	LiteralEqualToken            = "="
+	LiteralOpenParenthesisToken  = "("
+	LiteralCloseParenthesisToken = ")"
+	LiteralOpenSBracketToken     = "["
+	LiteralCloseSBracketToken    = "]"
+	LiteralOpenCBracketToken     = "{"
+	LiteralCloseCBracketToken    = "}"
+	LiteralColonToken            = ":"
+	LiteralArrowTypeToke         = "->"
+	LiteralCommaToken            = ","
+
+	LiteralFalseToken = "false"
+	LiteralTrueToken  = "true"
 )
+
+// TODO: bsena; use literal types here
+
+// Kind types
+const (
+	FunctionKind = "function"
+	VariableKind = "variable"
+)
+
+type Position struct {
+	RowStart    uint
+	ColumnStart uint
+	RowEnd      uint
+	ColumnEnd   uint
+}
 
 // Machine State Machine-like implementation.
 // To make it concurrent use a channel to communicate between functions.
@@ -55,7 +74,8 @@ type Machine struct {
 	text  []byte
 
 	// HasSymbol flag for whether we have a symbol in the current context. Can only be assigned when state is finalized
-	HasSymbol bool
+	HasSymbol      bool
+	SymbolPosition Position
 
 	// TODO: something tell me that these control variables are the opposite of what a state machine should be
 	IsFunction bool
@@ -65,7 +85,7 @@ type Machine struct {
 	TSSymbolKind string
 	SymbolName   string
 	SymbolValue  string
-	SymbolDoc    string
+	SymbolKind   string
 }
 
 // StateFn is Rob Pike's state machine pattern. For every state there is a function that represents it.
@@ -81,23 +101,25 @@ func (m *Machine) Start() StateFn {
 	return m.start()
 }
 
-func (m *Machine) reset(state string) {
-	m.state = state
-
+func (m *Machine) reset() {
 	m.HasSymbol = false
 	m.IsVariable = false
 	m.IsFunction = false
 	m.HasValue = false
 
 	m.SymbolValue = ""
+	m.SymbolName = ""
+	m.TSSymbolKind = ""
+	m.SymbolKind = ""
 }
 
 func (m *Machine) start() StateFn {
 	return func(node *tree_sitter.Node) StateFn {
-		m.reset(StateIdle)
+		m.reset()
 
 		input := node.Kind()
 
+		// TODO: bsena; parse classes and methods to have inner
 		switch input {
 		case FunctionToken:
 			return m.functionStart()
@@ -112,14 +134,21 @@ func (m *Machine) start() StateFn {
 func (m *Machine) functionStart() StateFn {
 	return func(node *tree_sitter.Node) StateFn {
 		// TODO: bsena; Add here parameters and return type definitions
+
 		kind := node.Kind()
 		switch kind {
 		case DefToken:
 			return m.functionStart()
 		case IdentifierToken:
+			// Setup start
+			m.SymbolPosition.RowStart = node.Range().StartPoint.Row
+			m.SymbolPosition.ColumnStart = node.Range().StartPoint.Column
+
 			m.SymbolName = m.extractCurrentByteRange(node)
 			m.TSSymbolKind = kind
+			m.SymbolKind = FunctionKind
 			m.IsFunction = true
+
 			return m.functionIdentifier()
 		}
 
@@ -131,15 +160,31 @@ func (m *Machine) functionIdentifier() StateFn {
 	return func(node *tree_sitter.Node) StateFn {
 		kind := node.Kind()
 		switch kind {
-		// TODO: bsena; parse parameters
-		case ParametersToken, LiteralOpenParenthesis, TypedParameterToken,
-			IdentifierToken, LiteralColon, TypeToken,
-			LiteralComma, LiteralCloseParenthesis, LiteralArrowType:
+		// TODO: bsena; parse parameters, probably put as children, or use submachines
+		case ParametersToken, DefaultParameterToken, TypedParameterToken, TypedDefaultParameterToken, TypeParamaterToken,
+
+			LiteralOpenParenthesisToken, LiteralCloseParenthesisToken,
+			LiteralOpenSBracketToken, LiteralCloseSBracketToken,
+			LiteralOpenCBracketToken, LiteralCloseCBracketToken,
+
+			GenericTypeToken,
+			IdentifierToken,
+
+			LiteralFalseToken, LiteralTrueToken,
+
+			StringTypeToken, StringStartToken, StringContentToken, StringEndToken,
+			IntTypeToken, FloatTypeToken, ListTypeToken, NoneTypeToken, DictTypeToken,
+
+			LiteralColonToken, TypeToken, LiteralEqualToken,
+			LiteralCommaToken, LiteralArrowTypeToke:
+
 			return m.functionIdentifier()
 		case BlockToken:
 			return m.functionBlockStart()
 		}
 
+		m.SymbolPosition.RowEnd = node.Range().EndPoint.Row
+		m.SymbolPosition.ColumnEnd = node.Range().EndPoint.Column
 		m.HasSymbol = true
 		return m.start()
 	}
@@ -153,10 +198,11 @@ func (m *Machine) functionBlockStart() StateFn {
 		switch kind {
 		case StatementToken:
 			return m.typeState()
-			// return m.functionStatmentStart()
 		}
 
 		// TODO: bsena; When fuction stops give tree_sitter.Node a clue to go back up in the tree to prevent parsing undesirable nodes
+		m.SymbolPosition.RowEnd = node.Range().EndPoint.Row
+		m.SymbolPosition.ColumnEnd = node.Range().EndPoint.Column
 		m.HasSymbol = true
 		return m.start()
 	}
@@ -195,9 +241,14 @@ func (m *Machine) assignmentState() StateFn {
 		kind := node.Kind()
 		switch kind {
 		case IdentifierToken:
+			// Setup start
+			m.SymbolPosition.RowStart = node.Range().StartPoint.Row
+			m.SymbolPosition.ColumnStart = node.Range().StartPoint.Column
+
 			m.SymbolName = m.extractCurrentByteRange(node)
 			m.IsVariable = true
 			m.TSSymbolKind = kind
+			m.SymbolKind = VariableKind
 			return m.typeState()
 		}
 
@@ -209,7 +260,7 @@ func (m *Machine) typeState() StateFn {
 	return func(node *tree_sitter.Node) StateFn {
 		kind := node.Kind()
 		switch kind {
-		case EqualToken:
+		case LiteralEqualToken:
 			return m.typeState()
 		case StringTypeToken:
 			return m.stringTypeState()
@@ -218,6 +269,8 @@ func (m *Machine) typeState() StateFn {
 		case FloatTypeToken:
 		}
 
+		m.SymbolPosition.RowEnd = node.Range().EndPoint.Row
+		m.SymbolPosition.ColumnEnd = node.Range().EndPoint.Column
 		m.HasSymbol = true
 		return m.start()
 	}
@@ -235,6 +288,8 @@ func (m *Machine) stringTypeState() StateFn {
 			m.HasValue = true
 		}
 
+		m.SymbolPosition.RowEnd = node.Range().EndPoint.Row
+		m.SymbolPosition.ColumnEnd = node.Range().EndPoint.Column
 		m.HasSymbol = true
 		return m.start()
 	}

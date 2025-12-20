@@ -32,15 +32,26 @@ var EmojiMapper = map[string]string{
 }
 
 func TextDocumentCompletionFuncWrapper(manager *runtime.Manager) protocol.TextDocumentCompletionFunc {
+	// TODO: bsena; Add builins as docs in manager doc map like heph://builtin
+	bts := runtime.ParseBuiltins(manager.Parser)
 	return func(context *glsp.Context, params *protocol.CompletionParams) (any, error) {
+		// TODO: search in manager
+		// params.TextDocument.URI
 		var completionItems []protocol.CompletionItem
 
-		for word, emoji := range EmojiMapper {
-			emojiCopy := emoji // Create a copy of emoji
+		for _, symbol := range bts {
+			detail := *symbol.Detail
+			name := symbol.Name
+			// TODO: bsena; Parse kind properly based on symbol.Kind
+			kind := protocol.CompletionItemKindConstructor
+
+			// TODO: bsena; How to add parameters etc etc?
 			completionItems = append(completionItems, protocol.CompletionItem{
-				Label:      word,
-				Detail:     &emojiCopy,
-				InsertText: &emojiCopy,
+				Label:      name,
+				InsertText: &name,
+				Kind:       &kind,
+				Detail:     &name, // TODO: bsena; maybe details is the signature of the function, or the value itself of the thing
+				Documentation: &detail,
 			})
 		}
 
