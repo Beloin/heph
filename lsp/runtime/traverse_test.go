@@ -7,13 +7,14 @@ import (
 
 	"github.com/hephbuild/heph/lsp/runtime"
 	"github.com/stretchr/testify/suite"
-	protocol "github.com/tliron/glsp/protocol_3_16"
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 	tree_sitter_python "github.com/tree-sitter/tree-sitter-python/bindings/go"
 )
 
 //go:embed testdata/test.py
 var pythonTest []byte
+
+var pythonNames = []string{"my_custom_function", "my_custom_variable", "my_custom_result"}
 
 type TraverseSuite struct {
 	suite.Suite
@@ -45,16 +46,14 @@ func (suite *TraverseSuite) TestPyMachine() {
 	state := machine.Start()
 	runtime.Traverse(targetTree, func(node *tree_sitter.Node) bool {
 		state = state(node)
-		fmt.Println(node.Kind())
+		// fmt.Println(node.Kind())
 
 		if machine.HasSymbol {
 			fmt.Printf("Custom Type: %s, Name: %s, Value: %s\n", machine.TSSymbolKind, machine.SymbolName, machine.SymbolValue)
 		}
 
 		if machine.HasSymbol && machine.IsFunction {
-			start, end := node.ByteRange()
-			v := pythonTest[start:end]
-			functionName = string(v)
+			functionName = machine.SymbolName
 
 			// return false
 		}
@@ -65,29 +64,25 @@ func (suite *TraverseSuite) TestPyMachine() {
 	suite.Require().Equal("my_custom_function", functionName)
 }
 
-func (suite *TraverseSuite) TestPyVariables() {
+func (suite *TraverseSuite) TestPyNames() {
 	parser := suite.newParser()
 	targetTree := parser.Parse(pythonTest, nil)
 
 	machine := runtime.NewMachine(pythonTest)
 	state := machine.Start()
 
-	s := []protocol.DocumentSymbol{}
+	names := []string{}
 
 	runtime.Traverse(targetTree, func(node *tree_sitter.Node) bool {
 		state = state(node)
-		if machine.HasSymbol && machine.IsVariable {
-			fmt.Printf("Custom Type: %s, Name: %s, Value: %s\n", machine.TSSymbolKind, machine.SymbolName, machine.SymbolValue)
-			symbol := protocol.DocumentSymbol{
-				Name: machine.SymbolName,
-				// Kind: protocol, // TODO: add a mapper kind
-				// Range: // TODO: find a way to convert bytes to line and character (column)
-				// Detail: machine.TSComment,
-			}
+		if machine.HasSymbol {
+			names = append(names, machine.SymbolName)
 		}
 
 		return true
 	})
+
+	suite.Require().ElementsMatch(pythonNames, names)
 }
 
 func TestTraverseSuite(t *testing.T) {

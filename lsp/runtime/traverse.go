@@ -60,6 +60,10 @@ func Traverse(tree *tree_sitter.Tree, nodeFunc NodeTraversalFunc) {
 
 	}
 
+	// Calls again with root
+	child := cu.Node()
+	nodeFunc(child)
+
 	// TODO: bsena; check if we can use this implementation since is easier and simpler
 
 	// Using a queue
