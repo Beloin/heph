@@ -10,6 +10,7 @@ type NodeTraversalFunc = func(*tree_sitter.Node) bool
 
 func Traverse(tree *tree_sitter.Tree, nodeFunc NodeTraversalFunc) {
 	cu := tree.Walk()
+	defer cu.Close()
 
 	// Example:
 	//           []

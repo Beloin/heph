@@ -13,9 +13,11 @@ var target []byte
 var helpers []byte
 
 
-func parseBuiltins(parser *tree_sitter.Parser) {
+func ParseBuiltins(parser *tree_sitter.Parser) {
 	targetTree := parser.Parse(target, nil)
+	defer targetTree.Close()
 	helpersTree := parser.Parse(helpers, nil)
+	defer helpersTree.Close()
 
 	// TODO: bsena; use a custom cst to validate our existing traversal method
 	Traverse(targetTree, func(node *tree_sitter.Node) bool {
