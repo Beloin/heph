@@ -6,6 +6,7 @@ type SymbolKind int
 const (
 	FunctionKind SymbolKind = iota
 	VariableKind
+	FieldKind
 )
 
 type Position struct {
@@ -31,6 +32,8 @@ type Symbol struct {
 	Position Position
 
 	SignaturePosition rawPosition
+
+	Symbols []*Symbol // TODO: bsena; inner field
 }
 
 func (s *Symbol) Is(kind SymbolKind) bool {

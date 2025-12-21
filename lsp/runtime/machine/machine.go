@@ -1,11 +1,14 @@
+// Package machine is another way to extract function, variables, classes etc from tree_sitter's Node.
+// It is still not fully implemented, but is supposed to be a replacement to tree_sitter query.
+//
+// The main difference is that this implementation is supposed to to run through all nodes and extract symbols information
+// based in a state machine.
 package machine
 
 import (
 	"github.com/hephbuild/heph/lsp/runtime/symbol"
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 )
-
-// TODO: bsena; Push to state machine
 
 const (
 	// Function tokens
@@ -73,7 +76,6 @@ type Machine struct {
 // For now it needs to have an end condition and can only change its own state.
 type StateFn func(*tree_sitter.Node) StateFn
 
-// TODO: bsena; rename only to Start() when withiun its own package
 func NewMachine(text []byte) *Machine {
 	return &Machine{text: text}
 }

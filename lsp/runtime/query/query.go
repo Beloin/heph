@@ -2,16 +2,22 @@ package query
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/hephbuild/heph/lsp/runtime/symbol"
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 	tree_sitter_python "github.com/tree-sitter/tree-sitter-python/bindings/go"
 )
 
+// Examples in https://github.com/tree-sitter/go-tree-sitter/blob/master/query_test.go
+
 const functionQuery = `
-  (function_definition
-	  name: (identifier) @function.name
-	  parameters: (parameters) @function.params)
+(function_definition
+  name: (identifier) @function.name
+  parameters: (parameters) @function.params
+  body: (block .
+     (expression_statement
+      (string (string_content) )) @function.docstring)?)
 `
 
 var ErrEmptyTreeError = errors.New("empty tree")
@@ -25,35 +31,30 @@ func ExtractFunctions(tree *tree_sitter.Tree, text []byte) ([]*symbol.Symbol, er
 	}
 
 	query, err := tree_sitter.NewQuery(lang, functionQuery)
-	defer query.Close()
 	if err != nil {
 		return nil, err
 	}
 
+	defer query.Close()
+
 	cursor := tree_sitter.NewQueryCursor()
 	defer cursor.Close()
 
-	matches := cursor.Captures(query, tree.RootNode(), text)
-	match, _ := matches.Next()
-	for match != nil {
+	matches := cursor.Matches(query, tree.RootNode(), text)
+	for match := matches.Next(); match != nil; match = matches.Next() {
 		for _, capture := range match.Captures {
-			node := capture.Node
-			node.StartPosition()
-			node.EndPosition()
-			node.Kind()
+			patternName := query.CaptureNames()[capture.Index]
+
+			fmt.Printf(
+				"Match %d, Capture %d (%s): %s\n",
+				match.PatternIndex,
+				capture.Index,
+				patternName,
+				capture.Node.Utf8Text(text),
+			)
+
 		}
-
-		match, _ = matches.Next()
 	}
-
-	// matches := cu.Matches(q, tree.RootNode(), rawText)
-	// first := matches.Next()
-	// captures := first.Captures
-	// capture := captures[0]
-	//
-	// newCaps := cu.Captures(q, tree.RootNode(), rawText)
-	// first2, _ := newCaps.Next()
-	// caps := first2.Captures
 
 	return nil, nil
 }
