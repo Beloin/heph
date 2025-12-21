@@ -10,7 +10,7 @@ import (
 //go:embed builtin/target.py
 var target []byte
 
-//go:embed builtin/target.py
+//go:embed builtin/helpers.py
 var helpers []byte
 
 //go:embed builtin/pybt.py

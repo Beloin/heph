@@ -9,6 +9,7 @@ const (
 	FunctionToken              = "function_definition"
 	DefToken                   = "def"
 	ParametersToken            = "parameters"
+	ListSplatToken             = "list_splat_pattern"
 	DefaultParameterToken      = "default_parameter"
 	TypeParamaterToken         = "type_parameter"
 	TypedParameterToken        = "typed_parameter"
@@ -47,6 +48,7 @@ const (
 	LiteralColonToken            = ":"
 	LiteralArrowTypeToke         = "->"
 	LiteralCommaToken            = ","
+	LiteralSplatToken            = "*"
 
 	LiteralFalseToken = "false"
 	LiteralTrueToken  = "true"
@@ -57,11 +59,8 @@ const (
 type Machine struct {
 	text []byte
 
-	// HasSymbol flag for whether we have a symbol in the current context. Can only be assigned when state is finalized
+	// HasSymbol flag for whether we have a symbol in the current context. Can only be assigned when state is finalized.
 	HasSymbol bool
-
-	// TODO: something tell me that these control variables are the opposite of what a state machine should be
-	HasValue bool
 
 	Symbol Symbol
 }
@@ -81,8 +80,6 @@ func (m *Machine) Start() StateFn {
 
 func (m *Machine) reset() {
 	m.HasSymbol = false
-	m.HasValue = false
-
 	m.Symbol = Symbol{}
 }
 
@@ -120,6 +117,7 @@ func (m *Machine) functionStart() StateFn {
 			m.Symbol.Name = m.extractCurrentByteRange(node)
 			m.Symbol.Kind = FunctionKind
 
+			m.Symbol.signaturePosition.ByteStart = node.Range().StartByte
 			return m.functionIdentifier()
 		}
 
@@ -129,14 +127,20 @@ func (m *Machine) functionStart() StateFn {
 
 func (m *Machine) functionIdentifier() StateFn {
 	return func(node *tree_sitter.Node) StateFn {
+		// TODO: bsena; parse parameters, probably put as children, or use submachines
 		kind := node.Kind()
 		switch kind {
-		// TODO: bsena; parse parameters, probably put as children, or use submachines
-		case ParametersToken, DefaultParameterToken, TypedParameterToken, TypedDefaultParameterToken, TypeParamaterToken,
+		case LiteralColonToken:
+			// TODO: make a better way to do this
+			m.Symbol.signaturePosition.ByteEnd = node.Range().StartByte
+			m.Symbol.Signature = m.extractByteRange(m.Symbol.signaturePosition.ByteStart, m.Symbol.signaturePosition.ByteEnd)
+			fallthrough
+		case ParametersToken, DefaultParameterToken, TypedParameterToken, TypedDefaultParameterToken, TypeParamaterToken, ListSplatToken,
 
 			LiteralOpenParenthesisToken, LiteralCloseParenthesisToken,
 			LiteralOpenSBracketToken, LiteralCloseSBracketToken,
 			LiteralOpenCBracketToken, LiteralCloseCBracketToken,
+			LiteralSplatToken,
 
 			GenericTypeToken,
 			IdentifierToken,
@@ -146,9 +150,8 @@ func (m *Machine) functionIdentifier() StateFn {
 			StringTypeToken, StringStartToken, StringContentToken, StringEndToken,
 			IntTypeToken, FloatTypeToken, ListTypeToken, NoneTypeToken, DictTypeToken,
 
-			LiteralColonToken, TypeToken, LiteralEqualToken,
+			TypeToken, LiteralEqualToken,
 			LiteralCommaToken, LiteralArrowTypeToke:
-
 			return m.functionIdentifier()
 		case BlockToken:
 			return m.functionBlockStart()
@@ -254,9 +257,7 @@ func (m *Machine) stringTypeState() StateFn {
 			return m.stringTypeState()
 		case StringContentToken:
 			v := m.extractCurrentByteRange(node)
-
 			m.Symbol.Value = v
-			m.HasValue = true
 		}
 
 		m.Symbol.Position.RowEnd = node.Range().EndPoint.Row
@@ -268,6 +269,10 @@ func (m *Machine) stringTypeState() StateFn {
 
 func (m *Machine) extractCurrentByteRange(node *tree_sitter.Node) string {
 	start, end := node.ByteRange()
+	return m.extractByteRange(start, end)
+}
+
+func (m *Machine) extractByteRange(start, end uint) string {
 	v := m.text[start:end]
 	return string(v)
 }

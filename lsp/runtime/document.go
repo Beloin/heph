@@ -20,6 +20,11 @@ type Position struct {
 	ColumnEnd   uint
 }
 
+type rawPosition struct {
+	ByteStart uint
+	ByteEnd   uint
+}
+
 type Symbol struct {
 	Name      string
 	Kind      SymbolKind
@@ -29,6 +34,8 @@ type Symbol struct {
 	Value string
 
 	Position Position
+
+	signaturePosition rawPosition
 }
 
 func (s *Symbol) Is(kind SymbolKind) bool {
