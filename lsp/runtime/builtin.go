@@ -20,25 +20,23 @@ var pybt []byte
 // TODO: bsena; Should we use query instead of parsing all symbols?
 func ParseBuiltins(parser *tree_sitter.Parser) []*Symbol {
 	targetTree := parser.Parse(target, nil)
-	// defer targetTree.Close()
+	defer targetTree.Close()
 
 	helpersTree := parser.Parse(helpers, nil)
-	// defer helpersTree.Close()
+	defer helpersTree.Close()
 
 	pybtTree := parser.Parse(pybt, nil)
-	// defer pybtTree.Close()
+	defer pybtTree.Close()
 
-	targetSymbols := extractSymbols(targetTree, target)
-
-	helpersSymbols := extractSymbols(helpersTree, helpers)
-
-	pybtSymbols := extractSymbols(pybtTree, pybt)
+	targetSymbols := ExtractSymbols(targetTree, target)
+	helpersSymbols := ExtractSymbols(helpersTree, helpers)
+	pybtSymbols := ExtractSymbols(pybtTree, pybt)
 
 	return slices.Concat(targetSymbols, helpersSymbols, pybtSymbols)
 }
 
-// extractDocument extracts symbols from a given tree and raw byte slice.
-func extractSymbols(tree *tree_sitter.Tree, raw []byte) []*Symbol {
+// ExtractSymbols extracts symbols from a given tree and raw byte slice.
+func ExtractSymbols(tree *tree_sitter.Tree, raw []byte) []*Symbol {
 	machine := NewMachine(raw)
 	state := machine.Start()
 

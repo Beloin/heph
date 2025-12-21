@@ -8,29 +8,6 @@ import (
 
 // protocol.TextDocumentCompletionFunc
 
-var EmojiMapper = map[string]string{
-	"happy":      "😀",
-	"sad":        "😢",
-	"angry":      "😠",
-	"confused":   "😕",
-	"excited":    "😆",
-	"love":       "😍",
-	"laughing":   "😂",
-	"crying":     "😭",
-	"sleepy":     "😴",
-	"surprised":  "😮",
-	"sick":       "🤒",
-	"cool":       "😎",
-	"nerd":       "🤓",
-	"worried":    "😟",
-	"scared":     "😨",
-	"silly":      "🤪",
-	"shocked":    "😱",
-	"sunglasses": "😎",
-	"tongue":     "😛",
-	"thinking":   "🤔",
-}
-
 func TextDocumentCompletionFuncWrapper(manager *runtime.Manager) protocol.TextDocumentCompletionFunc {
 	// TODO: bsena; Add builins as docs in manager doc map like heph://builtin
 	bts := runtime.ParseBuiltins(manager.Parser)
@@ -50,7 +27,7 @@ func TextDocumentCompletionFuncWrapper(manager *runtime.Manager) protocol.TextDo
 				Label:         name,
 				InsertText:    &name,
 				Kind:          &kind,
-				Detail:        &sig, // TODO: bsena; maybe details is the signature of the function, or the value itself of the thing
+				Detail:        &sig,
 				Documentation: doc,
 			})
 		}

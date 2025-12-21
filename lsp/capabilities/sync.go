@@ -35,12 +35,12 @@ func TextDocumentDidOpenWrapper(manager *runtime.Manager) protocol.TextDocumentD
 
 		parser := manager.Parser
 		text := params.TextDocument.Text
-		buffer := bytes.NewBufferString(text)
+		bts := []byte(text)
 
-		if doc := manager.GetDocument(params.TextDocument.URI); doc != nil {
+		if doc, ok := manager.GetDocument(params.TextDocument.URI); ok {
 			// TODO: bsena; implement this edit when file has changed
 			// doc.Tree.Edit(...)
-			newTree := parser.Parse(buffer.Bytes(), nil)
+			newTree := parser.Parse(bts, nil)
 			if newTree == nil {
 				return ErrInvalidTree
 			}
@@ -50,13 +50,13 @@ func TextDocumentDidOpenWrapper(manager *runtime.Manager) protocol.TextDocumentD
 			return nil
 		}
 
-		newTree := parser.Parse(buffer.Bytes(), nil)
+		newTree := parser.Parse(bts, nil)
 		// TODO: bsena; we need better err here
 		if newTree == nil {
 			return ErrInvalidTree
 		}
 
-		newDoc := runtime.NewDocument(newTree)
+		newDoc := runtime.NewDocument(newTree, bts)
 		version := params.TextDocument.Version
 		manager.SetDocument(params.TextDocument.URI, version, newDoc)
 
@@ -68,8 +68,8 @@ func TextDocumentDidChangeFuncWrapper(manager *runtime.Manager) protocol.TextDoc
 	return func(context *glsp.Context, params *protocol.DidChangeTextDocumentParams) error {
 		parser := manager.Parser
 
-		doc := manager.GetDocument(params.TextDocument.URI)
-		if doc == nil {
+		doc, ok := manager.GetDocument(params.TextDocument.URI)
+		if !ok {
 			return ErrInvalidDoc
 		}
 
@@ -81,6 +81,8 @@ func TextDocumentDidChangeFuncWrapper(manager *runtime.Manager) protocol.TextDoc
 				// 	Column: uint(event.Range.Start.Character),
 				// }
 
+
+				// event.Text
 				// doc.Tree.Edit(&tree_sitter.InputEdit{
 				// 	StartPosition: start,
 				// })

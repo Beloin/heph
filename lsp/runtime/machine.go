@@ -7,6 +7,7 @@ import tree_sitter "github.com/tree-sitter/go-tree-sitter"
 const (
 	// Function tokens
 	FunctionToken              = "function_definition"
+	FunctionCallToken          = "function"
 	DefToken                   = "def"
 	ParametersToken            = "parameters"
 	ListSplatToken             = "list_splat_pattern"
@@ -31,7 +32,7 @@ const (
 	StringContentToken = "string_content"
 	StringEndToken     = "string_end"
 
-	IntTypeToken   = "int"
+	IntTypeToken   = "integer"
 	FloatTypeToken = "float"
 	ListTypeToken  = "list"
 	DictTypeToken  = "dictionary"
@@ -82,6 +83,11 @@ func (m *Machine) reset() {
 	m.HasSymbol = false
 	m.Symbol = Symbol{}
 }
+
+// TODO: bsena; What if instead we go here, we just query the tree?
+// like get symbols from tree.Query(...)
+// The idea is to have a tree+rawText+pre-fetched symbols 
+// and keep changing tree+rawText+symbols when documented has been updated
 
 func (m *Machine) start() StateFn {
 	return func(node *tree_sitter.Node) StateFn {

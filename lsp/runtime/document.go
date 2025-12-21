@@ -1,7 +1,6 @@
 package runtime
 
 import (
-	protocol "github.com/tliron/glsp/protocol_3_16"
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 )
 
@@ -42,15 +41,33 @@ func (s *Symbol) Is(kind SymbolKind) bool {
 	return s.Kind == kind
 }
 
-// TODO: bsena; implement something like this
-// Think about how we will have multiple documents
 type Document struct {
-	Symbols []*protocol.DocumentSymbol // TODO: bsena; we probalby will need to wrap this in our own type to handle docs etc
+	Symbols []*Symbol
 	Tree    *tree_sitter.Tree
+	Text    []byte
 }
 
-func NewDocument(tree *tree_sitter.Tree) *Document {
-	doc := &Document{Tree: tree}
+func (d *Document) Close() {
+	d.Tree.Close()
+}
+
+func NewDocument(tree *tree_sitter.Tree, rawText []byte) *Document {
+	// pt := tree_sitter.NewLanguage(tree_sitter_python.Language())
+	// q, _ := tree_sitter.NewQuery(pt, "")
+	// cu := tree_sitter.NewQueryCursor()
+	// matches := cu.Matches(q, tree.RootNode(), rawText)
+	// first := matches.Next()
+	// captures := first.Captures
+	// capture := captures[0]
+	//
+	// newCaps := cu.Captures(q, tree.RootNode(), rawText)
+	// first2, _ := newCaps.Next()
+	// caps:= first2.Captures
+	// caps[0].Index
+
+	doc := &Document{Tree: tree, Text: rawText}
+	doc.Symbols = ExtractSymbols(tree, rawText)
+
 	// TODO: bsena; pre-fetch all functions, symbols from tree
 	// Remember, trees are AST trees, so it should be something like this:
 	//                         (*)

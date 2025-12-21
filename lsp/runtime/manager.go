@@ -13,23 +13,24 @@ type docTuple struct {
 }
 
 type Manager struct {
-	DocumentMap map[protocol.DocumentUri]*docTuple
+	BuiltinSymbols []*Symbol
+	DocumentMap map[protocol.DocumentUri]*docTuple // TODO: bsena; use sync.Map
 	Parser      *tree_sitter.Parser
 }
 
 func NewManager(parser *tree_sitter.Parser) *Manager {
-	ParseBuiltins(parser)
-	return &Manager{DocumentMap: map[protocol.DocumentUri]*docTuple{}, Parser: parser}
+	builtins := ParseBuiltins(parser)
+	return &Manager{DocumentMap: map[protocol.DocumentUri]*docTuple{}, Parser: parser, BuiltinSymbols: builtins}
 }
 
 // GetDocument queries and look for an existing document in Manager.
 // returns nil if not present
-func (m *Manager) GetDocument(uri protocol.DocumentUri) *Document {
+func (m *Manager) GetDocument(uri protocol.DocumentUri) (*Document, bool) {
 	if tuple, found := m.DocumentMap[uri]; found {
-		return tuple.Document
+		return tuple.Document, true
 	}
 
-	return nil
+	return nil, false
 }
 
 func (m *Manager) SetDocument(uri protocol.DocumentUri, version protocol.Integer, doc *Document) {

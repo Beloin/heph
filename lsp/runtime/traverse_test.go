@@ -17,6 +17,9 @@ var pythonTest []byte
 //go:embed builtin/target.py
 var targetTest []byte
 
+//go:embed testdata/class_test.py
+var classTest []byte
+
 var pythonNames = []string{"my_custom_function", "my_custom_variable", "my_custom_result"}
 
 type TraverseSuite struct {
@@ -96,6 +99,17 @@ func (suite *TraverseSuite) TestPrintTargetKinds() {
 	targetTree := parser.Parse(targetTest, nil)
 
 	runtime.Traverse(targetTree, func(node *tree_sitter.Node) bool {
+		fmt.Println(node.Kind())
+
+		return true
+	})
+}
+
+func (suite *TraverseSuite) TestPrintClassKinds() {
+	parser := suite.newParser()
+	classTree := parser.Parse(classTest, nil)
+
+	runtime.Traverse(classTree, func(node *tree_sitter.Node) bool {
 		fmt.Println(node.Kind())
 
 		return true
