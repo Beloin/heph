@@ -40,21 +40,37 @@ func ExtractFunctions(tree *tree_sitter.Tree, text []byte) ([]*symbol.Symbol, er
 	cursor := tree_sitter.NewQueryCursor()
 	defer cursor.Close()
 
+	functions := []*symbol.Symbol{}
 	matches := cursor.Matches(query, tree.RootNode(), text)
 	for match := matches.Next(); match != nil; match = matches.Next() {
+		currSymbol := &symbol.Symbol{Kind: symbol.FunctionKind}
 		for _, capture := range match.Captures {
 			patternName := query.CaptureNames()[capture.Index]
+			nodeRange := capture.Node.Range()
+			patternValue := capture.Node.Utf8Text(text)
+
+			switch patternName {
+			case "function.name":
+				currSymbol.Position.RowStart = nodeRange.StartPoint.Row
+				currSymbol.Position.ColumnStart = nodeRange.StartPoint.Column
+				currSymbol.Name = patternValue
+			case "function.params":
+				currSymbol.Signature = currSymbol.Name + patternValue
+			case "function.docString":
+				currSymbol.DocString = patternValue
+			}
 
 			fmt.Printf(
 				"Match %d, Capture %d (%s): %s\n",
 				match.PatternIndex,
 				capture.Index,
 				patternName,
-				capture.Node.Utf8Text(text),
+				patternValue,
 			)
-
 		}
+
+		functions = append(functions, currSymbol)
 	}
 
-	return nil, nil
+	return functions, nil
 }

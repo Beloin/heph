@@ -28,6 +28,7 @@ type Symbol struct {
 
 	// Value is the current literal value for a variable, or doc string for functions
 	Value string
+	DocString string
 
 	Position Position
 
