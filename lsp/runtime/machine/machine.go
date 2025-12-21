@@ -1,6 +1,9 @@
-package runtime
+package machine
 
-import tree_sitter "github.com/tree-sitter/go-tree-sitter"
+import (
+	"github.com/hephbuild/heph/lsp/runtime/symbol"
+	tree_sitter "github.com/tree-sitter/go-tree-sitter"
+)
 
 // TODO: bsena; Push to state machine
 
@@ -63,7 +66,7 @@ type Machine struct {
 	// HasSymbol flag for whether we have a symbol in the current context. Can only be assigned when state is finalized.
 	HasSymbol bool
 
-	Symbol Symbol
+	Symbol symbol.Symbol
 }
 
 // StateFn is Rob Pike's state machine pattern. For every state there is a function that represents it.
@@ -81,13 +84,13 @@ func (m *Machine) Start() StateFn {
 
 func (m *Machine) reset() {
 	m.HasSymbol = false
-	m.Symbol = Symbol{}
+	m.Symbol = symbol.Symbol{}
 }
 
 // TODO: bsena; What if instead we go here, we just query the tree?
 // like get symbols from tree.Query(...)
-// The idea is to have a tree+rawText+pre-fetched symbols 
-// and keep changing tree+rawText+symbols when documented has been updated
+// The idea is to have a tree+rawText+pre-fetched symbols
+// and keep changing tree+rawText+symbols when symboled has been updated
 
 func (m *Machine) start() StateFn {
 	return func(node *tree_sitter.Node) StateFn {
@@ -121,9 +124,9 @@ func (m *Machine) functionStart() StateFn {
 			m.Symbol.Position.ColumnStart = node.Range().StartPoint.Column
 
 			m.Symbol.Name = m.extractCurrentByteRange(node)
-			m.Symbol.Kind = FunctionKind
+			m.Symbol.Kind = symbol.FunctionKind
 
-			m.Symbol.signaturePosition.ByteStart = node.Range().StartByte
+			m.Symbol.SignaturePosition.ByteStart = node.Range().StartByte
 			return m.functionIdentifier()
 		}
 
@@ -138,8 +141,8 @@ func (m *Machine) functionIdentifier() StateFn {
 		switch kind {
 		case LiteralColonToken:
 			// TODO: make a better way to do this
-			m.Symbol.signaturePosition.ByteEnd = node.Range().StartByte
-			m.Symbol.Signature = m.extractByteRange(m.Symbol.signaturePosition.ByteStart, m.Symbol.signaturePosition.ByteEnd)
+			m.Symbol.SignaturePosition.ByteEnd = node.Range().StartByte
+			m.Symbol.Signature = m.extractByteRange(m.Symbol.SignaturePosition.ByteStart, m.Symbol.SignaturePosition.ByteEnd)
 			fallthrough
 		case ParametersToken, DefaultParameterToken, TypedParameterToken, TypedDefaultParameterToken, TypeParamaterToken, ListSplatToken,
 
@@ -171,7 +174,7 @@ func (m *Machine) functionIdentifier() StateFn {
 }
 
 // functionBlockStart defines the start block of a function
-// Only parse if its function documentation, if it's any other other statement stop parsing
+// Only parse if its function symbolation, if it's any other other statement stop parsing
 func (m *Machine) functionBlockStart() StateFn {
 	return func(node *tree_sitter.Node) StateFn {
 		kind := node.Kind()
@@ -189,7 +192,7 @@ func (m *Machine) functionBlockStart() StateFn {
 }
 
 // functionStatmentStart defines the first statement of a function
-// Only parse if its function documentation, if it's any other other statement stop parsing
+// Only parse if its function symbolation, if it's any other other statement stop parsing
 func (m *Machine) functionStatmentStart() StateFn {
 	// TODO: bsena; Create a new inner state machine to identify nested blocks and stop when they have been processed?
 	return func(node *tree_sitter.Node) StateFn {
@@ -226,7 +229,7 @@ func (m *Machine) assignmentState() StateFn {
 			m.Symbol.Position.ColumnStart = node.Range().StartPoint.Column
 
 			m.Symbol.Name = m.extractCurrentByteRange(node)
-			m.Symbol.Kind = VariableKind
+			m.Symbol.Kind = symbol.VariableKind
 
 			return m.typeState()
 		}

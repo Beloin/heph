@@ -1,24 +1,27 @@
-package runtime
+package builtin
 
 import (
 	_ "embed"
 	"slices"
 
+	"github.com/hephbuild/heph/lsp/runtime/machine"
+	"github.com/hephbuild/heph/lsp/runtime/symbol"
+	"github.com/hephbuild/heph/lsp/runtime/traverse"
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 )
 
-//go:embed builtin/target.py
+//go:embed target.py
 var target []byte
 
-//go:embed builtin/helpers.py
+//go:embed helpers.py
 var helpers []byte
 
-//go:embed builtin/pybt.py
+//go:embed pybt.py
 var pybt []byte
 
 // ParseBuiltins Parses builtin files and extracts their symbols.
 // TODO: bsena; Should we use query instead of parsing all symbols?
-func ParseBuiltins(parser *tree_sitter.Parser) []*Symbol {
+func ParseBuiltins(parser *tree_sitter.Parser) []*symbol.Symbol {
 	targetTree := parser.Parse(target, nil)
 	defer targetTree.Close()
 
@@ -36,12 +39,12 @@ func ParseBuiltins(parser *tree_sitter.Parser) []*Symbol {
 }
 
 // ExtractSymbols extracts symbols from a given tree and raw byte slice.
-func ExtractSymbols(tree *tree_sitter.Tree, raw []byte) []*Symbol {
-	machine := NewMachine(raw)
+func ExtractSymbols(tree *tree_sitter.Tree, raw []byte) []*symbol.Symbol {
+	machine := machine.NewMachine(raw)
 	state := machine.Start()
 
-	symbols := make([]*Symbol, 0)
-	Traverse(tree, func(node *tree_sitter.Node) bool {
+	symbols := make([]*symbol.Symbol, 0)
+	traverse.Traverse(tree, func(node *tree_sitter.Node) bool {
 		state = state(node)
 
 		if machine.HasSymbol {

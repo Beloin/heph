@@ -1,48 +1,13 @@
-package runtime
+package document
 
 import (
+	"github.com/hephbuild/heph/lsp/runtime/builtin"
+	"github.com/hephbuild/heph/lsp/runtime/symbol"
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 )
 
-type SymbolKind int
-
-// Kind types
-const (
-	FunctionKind SymbolKind = iota
-	VariableKind
-)
-
-type Position struct {
-	RowStart    uint
-	ColumnStart uint
-	RowEnd      uint
-	ColumnEnd   uint
-}
-
-type rawPosition struct {
-	ByteStart uint
-	ByteEnd   uint
-}
-
-type Symbol struct {
-	Name      string
-	Kind      SymbolKind
-	Signature string
-
-	// Value is the current literal value for a variable, or doc string for functions
-	Value string
-
-	Position Position
-
-	signaturePosition rawPosition
-}
-
-func (s *Symbol) Is(kind SymbolKind) bool {
-	return s.Kind == kind
-}
-
 type Document struct {
-	Symbols []*Symbol
+	Symbols []*symbol.Symbol
 	Tree    *tree_sitter.Tree
 	Text    []byte
 }
@@ -66,7 +31,7 @@ func NewDocument(tree *tree_sitter.Tree, rawText []byte) *Document {
 	// caps[0].Index
 
 	doc := &Document{Tree: tree, Text: rawText}
-	doc.Symbols = ExtractSymbols(tree, rawText)
+	doc.Symbols = builtin.ExtractSymbols(tree, rawText)
 
 	// TODO: bsena; pre-fetch all functions, symbols from tree
 	// Remember, trees are AST trees, so it should be something like this:

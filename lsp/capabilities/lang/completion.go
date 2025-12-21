@@ -2,6 +2,7 @@ package lang
 
 import (
 	"github.com/hephbuild/heph/lsp/runtime"
+	"github.com/hephbuild/heph/lsp/runtime/builtin"
 	"github.com/tliron/glsp"
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
@@ -10,7 +11,7 @@ import (
 
 func TextDocumentCompletionFuncWrapper(manager *runtime.Manager) protocol.TextDocumentCompletionFunc {
 	// TODO: bsena; Add builins as docs in manager doc map like heph://builtin
-	bts := runtime.ParseBuiltins(manager.Parser)
+	bts := builtin.ParseBuiltins(manager.Parser)
 	return func(context *glsp.Context, params *protocol.CompletionParams) (any, error) {
 		// TODO: search in manager
 		// params.TextDocument.URI

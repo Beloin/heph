@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/hephbuild/heph/lsp/runtime"
+	"github.com/hephbuild/heph/lsp/runtime/document"
 	"github.com/tliron/commonlog"
 	"github.com/tliron/glsp"
 
@@ -56,7 +57,7 @@ func TextDocumentDidOpenWrapper(manager *runtime.Manager) protocol.TextDocumentD
 			return ErrInvalidTree
 		}
 
-		newDoc := runtime.NewDocument(newTree, bts)
+		newDoc := document.NewDocument(newTree, bts)
 		version := params.TextDocument.Version
 		manager.SetDocument(params.TextDocument.URI, version, newDoc)
 
@@ -80,7 +81,6 @@ func TextDocumentDidChangeFuncWrapper(manager *runtime.Manager) protocol.TextDoc
 				// 	Row:    uint(event.Range.Start.Line),
 				// 	Column: uint(event.Range.Start.Character),
 				// }
-
 
 				// event.Text
 				// doc.Tree.Edit(&tree_sitter.InputEdit{

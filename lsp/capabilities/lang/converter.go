@@ -1,16 +1,16 @@
 package lang
 
 import (
-	"github.com/hephbuild/heph/lsp/runtime"
+	"github.com/hephbuild/heph/lsp/runtime/symbol"
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
-func MachineKindToCompletionKind(kind runtime.SymbolKind) protocol.CompletionItemKind {
+func MachineKindToCompletionKind(kind symbol.SymbolKind) protocol.CompletionItemKind {
 	switch kind {
-	case runtime.FunctionKind:
+	case symbol.FunctionKind:
 		return protocol.CompletionItemKindFunction
 
-	case runtime.VariableKind:
+	case symbol.VariableKind:
 		return protocol.CompletionItemKindVariable
 
 	default:
