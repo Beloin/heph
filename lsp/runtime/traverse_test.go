@@ -48,8 +48,8 @@ func (suite *TraverseSuite) TestPyFirstFunction() {
 	state := machine.Start()
 	runtime.Traverse(targetTree, func(node *tree_sitter.Node) bool {
 		state = state(node)
-		if machine.HasSymbol && machine.IsFunction {
-			functionName = machine.SymbolName
+		if machine.HasSymbol && machine.Symbol.Is(runtime.FunctionKind) {
+			functionName = machine.Symbol.Name
 			return false
 		}
 
@@ -71,7 +71,7 @@ func (suite *TraverseSuite) TestPyNames() {
 	runtime.Traverse(targetTree, func(node *tree_sitter.Node) bool {
 		state = state(node)
 		if machine.HasSymbol {
-			names = append(names, machine.SymbolName)
+			names = append(names, machine.Symbol.Name)
 		}
 
 		return true
@@ -112,7 +112,7 @@ func (suite *TraverseSuite) TestPrintNames() {
 	runtime.Traverse(targetTree, func(node *tree_sitter.Node) bool {
 		state = state(node)
 		if machine.HasSymbol {
-			fmt.Printf("Name: %s, Kind: %s, Value: %s - Pos: %+v\n", machine.SymbolName, machine.TSSymbolKind, machine.SymbolValue, machine.SymbolPosition)
+			fmt.Printf("Name: %s, Value: %s - Pos: %+v\n", machine.Symbol.Name, machine.Symbol.Value, machine.Symbol.Position)
 		}
 
 		return true

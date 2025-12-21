@@ -40,18 +40,18 @@ func TextDocumentCompletionFuncWrapper(manager *runtime.Manager) protocol.TextDo
 		var completionItems []protocol.CompletionItem
 
 		for _, symbol := range bts {
-			detail := *symbol.Detail
 			name := symbol.Name
-			// TODO: bsena; Parse kind properly based on symbol.Kind
-			kind := protocol.CompletionItemKindConstructor
+			sig := symbol.Signature
+			doc := symbol.Value
+			kind := MachineKindToCompletionKind(symbol.Kind)
 
 			// TODO: bsena; How to add parameters etc etc?
 			completionItems = append(completionItems, protocol.CompletionItem{
-				Label:      name,
-				InsertText: &name,
-				Kind:       &kind,
-				Detail:     &name, // TODO: bsena; maybe details is the signature of the function, or the value itself of the thing
-				Documentation: &detail,
+				Label:         name,
+				InsertText:    &name,
+				Kind:          &kind,
+				Detail:        &sig, // TODO: bsena; maybe details is the signature of the function, or the value itself of the thing
+				Documentation: doc,
 			})
 		}
 

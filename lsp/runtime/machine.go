@@ -28,7 +28,7 @@ const (
 	StringTypeToken    = "string"
 	StringStartToken   = "string_start"
 	StringContentToken = "string_content"
-	StringEndToken    = "string_end"
+	StringEndToken     = "string_end"
 
 	IntTypeToken   = "int"
 	FloatTypeToken = "float"
@@ -52,40 +52,18 @@ const (
 	LiteralTrueToken  = "true"
 )
 
-// TODO: bsena; use literal types here
-
-// Kind types
-const (
-	FunctionKind = "function"
-	VariableKind = "variable"
-)
-
-type Position struct {
-	RowStart    uint
-	ColumnStart uint
-	RowEnd      uint
-	ColumnEnd   uint
-}
-
 // Machine State Machine-like implementation.
 // To make it concurrent use a channel to communicate between functions.
 type Machine struct {
-	state string
-	text  []byte
+	text []byte
 
 	// HasSymbol flag for whether we have a symbol in the current context. Can only be assigned when state is finalized
-	HasSymbol      bool
-	SymbolPosition Position
+	HasSymbol bool
 
 	// TODO: something tell me that these control variables are the opposite of what a state machine should be
-	IsFunction bool
-	IsVariable bool
-	HasValue   bool
+	HasValue bool
 
-	TSSymbolKind string
-	SymbolName   string
-	SymbolValue  string
-	SymbolKind   string
+	Symbol Symbol
 }
 
 // StateFn is Rob Pike's state machine pattern. For every state there is a function that represents it.
@@ -103,14 +81,9 @@ func (m *Machine) Start() StateFn {
 
 func (m *Machine) reset() {
 	m.HasSymbol = false
-	m.IsVariable = false
-	m.IsFunction = false
 	m.HasValue = false
 
-	m.SymbolValue = ""
-	m.SymbolName = ""
-	m.TSSymbolKind = ""
-	m.SymbolKind = ""
+	m.Symbol = Symbol{}
 }
 
 func (m *Machine) start() StateFn {
@@ -141,13 +114,11 @@ func (m *Machine) functionStart() StateFn {
 			return m.functionStart()
 		case IdentifierToken:
 			// Setup start
-			m.SymbolPosition.RowStart = node.Range().StartPoint.Row
-			m.SymbolPosition.ColumnStart = node.Range().StartPoint.Column
+			m.Symbol.Position.RowStart = node.Range().StartPoint.Row
+			m.Symbol.Position.ColumnStart = node.Range().StartPoint.Column
 
-			m.SymbolName = m.extractCurrentByteRange(node)
-			m.TSSymbolKind = kind
-			m.SymbolKind = FunctionKind
-			m.IsFunction = true
+			m.Symbol.Name = m.extractCurrentByteRange(node)
+			m.Symbol.Kind = FunctionKind
 
 			return m.functionIdentifier()
 		}
@@ -183,8 +154,8 @@ func (m *Machine) functionIdentifier() StateFn {
 			return m.functionBlockStart()
 		}
 
-		m.SymbolPosition.RowEnd = node.Range().EndPoint.Row
-		m.SymbolPosition.ColumnEnd = node.Range().EndPoint.Column
+		m.Symbol.Position.RowEnd = node.Range().EndPoint.Row
+		m.Symbol.Position.ColumnEnd = node.Range().EndPoint.Column
 		m.HasSymbol = true
 		return m.start()
 	}
@@ -201,8 +172,8 @@ func (m *Machine) functionBlockStart() StateFn {
 		}
 
 		// TODO: bsena; When fuction stops give tree_sitter.Node a clue to go back up in the tree to prevent parsing undesirable nodes
-		m.SymbolPosition.RowEnd = node.Range().EndPoint.Row
-		m.SymbolPosition.ColumnEnd = node.Range().EndPoint.Column
+		m.Symbol.Position.RowEnd = node.Range().EndPoint.Row
+		m.Symbol.Position.ColumnEnd = node.Range().EndPoint.Column
 		m.HasSymbol = true
 		return m.start()
 	}
@@ -242,13 +213,12 @@ func (m *Machine) assignmentState() StateFn {
 		switch kind {
 		case IdentifierToken:
 			// Setup start
-			m.SymbolPosition.RowStart = node.Range().StartPoint.Row
-			m.SymbolPosition.ColumnStart = node.Range().StartPoint.Column
+			m.Symbol.Position.RowStart = node.Range().StartPoint.Row
+			m.Symbol.Position.ColumnStart = node.Range().StartPoint.Column
 
-			m.SymbolName = m.extractCurrentByteRange(node)
-			m.IsVariable = true
-			m.TSSymbolKind = kind
-			m.SymbolKind = VariableKind
+			m.Symbol.Name = m.extractCurrentByteRange(node)
+			m.Symbol.Kind = VariableKind
+
 			return m.typeState()
 		}
 
@@ -269,8 +239,8 @@ func (m *Machine) typeState() StateFn {
 		case FloatTypeToken:
 		}
 
-		m.SymbolPosition.RowEnd = node.Range().EndPoint.Row
-		m.SymbolPosition.ColumnEnd = node.Range().EndPoint.Column
+		m.Symbol.Position.RowEnd = node.Range().EndPoint.Row
+		m.Symbol.Position.ColumnEnd = node.Range().EndPoint.Column
 		m.HasSymbol = true
 		return m.start()
 	}
@@ -284,12 +254,13 @@ func (m *Machine) stringTypeState() StateFn {
 			return m.stringTypeState()
 		case StringContentToken:
 			v := m.extractCurrentByteRange(node)
-			m.SymbolValue = v
+
+			m.Symbol.Value = v
 			m.HasValue = true
 		}
 
-		m.SymbolPosition.RowEnd = node.Range().EndPoint.Row
-		m.SymbolPosition.ColumnEnd = node.Range().EndPoint.Column
+		m.Symbol.Position.RowEnd = node.Range().EndPoint.Row
+		m.Symbol.Position.ColumnEnd = node.Range().EndPoint.Column
 		m.HasSymbol = true
 		return m.start()
 	}

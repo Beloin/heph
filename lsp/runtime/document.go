@@ -5,6 +5,36 @@ import (
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 )
 
+type SymbolKind int
+
+// Kind types
+const (
+	FunctionKind SymbolKind = iota
+	VariableKind
+)
+
+type Position struct {
+	RowStart    uint
+	ColumnStart uint
+	RowEnd      uint
+	ColumnEnd   uint
+}
+
+type Symbol struct {
+	Name      string
+	Kind      SymbolKind
+	Signature string
+
+	// Value is the current literal value for a variable, or doc string for functions
+	Value string
+
+	Position Position
+}
+
+func (s *Symbol) Is(kind SymbolKind) bool {
+	return s.Kind == kind
+}
+
 // TODO: bsena; implement something like this
 // Think about how we will have multiple documents
 type Document struct {
