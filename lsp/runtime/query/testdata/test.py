@@ -13,6 +13,8 @@ def my_other_function():
 
 my_custom_variable = "custom variable value"
 
+# My Variable Comment
+my_new_var = 12
 
 my_custom_result = my_custom_function(my_custom_variable, "")
 

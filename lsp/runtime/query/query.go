@@ -20,12 +20,33 @@ const functionQuery = `
       (string (string_content) )) @function.docstring)?)
 `
 
+const variablesQuery = `
+(
+ ((comment) @var.comment)? .
+ (expression_statement
+	(assignment
+		left: (identifier) @var.name
+		right: (
+			[
+				(integer)
+				(string)
+				(float)
+				(list)
+				(dictionary)
+				(call)
+				(identifier)
+				(binary_operator)
+			] @var.value)
+		))
+)
+`
+
 var ErrEmptyTreeError = errors.New("empty tree")
 
-func ExtractFunctions(tree *tree_sitter.Tree, text []byte) ([]*symbol.Symbol, error) {
-	// TODO: bsena; See how to use the global server
-	lang := tree_sitter.NewLanguage(tree_sitter_python.Language())
+// TODO: bsena; See how to use the global server
+var lang = tree_sitter.NewLanguage(tree_sitter_python.Language())
 
+func ExtractFunctions(tree *tree_sitter.Tree, text []byte) ([]*symbol.Symbol, error) {
 	if tree.RootNode() == nil {
 		return nil, ErrEmptyTreeError
 	}
@@ -73,4 +94,54 @@ func ExtractFunctions(tree *tree_sitter.Tree, text []byte) ([]*symbol.Symbol, er
 	}
 
 	return functions, nil
+}
+
+func ExtractVariables(tree *tree_sitter.Tree, text []byte) ([]*symbol.Symbol, error) {
+	root := tree.RootNode()
+	if root == nil {
+		return nil, ErrEmptyTreeError
+	}
+
+	query, err := tree_sitter.NewQuery(lang, variablesQuery)
+	if err != nil {
+		return nil, err
+	}
+
+	defer query.Close()
+
+	cursor := tree_sitter.NewQueryCursor()
+	defer cursor.Close()
+
+	vars := []*symbol.Symbol{}
+	matches := cursor.Matches(query, root, text)
+	for match := matches.Next(); match != nil; match = matches.Next() {
+		// TODO: how to work with repeated symbols?
+
+		currSymbol := &symbol.Symbol{Kind: symbol.VariableKind}
+		for _, capture := range match.Captures {
+			patternName := query.CaptureNames()[capture.Index]
+			patternValue := capture.Node.Utf8Text(text)
+
+			switch patternName {
+			case "var.comment":
+				currSymbol.DocString = patternValue
+			case "var.name":
+				currSymbol.Name = patternValue
+			case "var.value":
+				currSymbol.Value = patternValue
+			}
+
+			fmt.Printf(
+				"Match %d, Capture %d (%s): %s\n",
+				match.PatternIndex,
+				capture.Index,
+				patternName,
+				patternValue,
+			)
+		}
+
+		vars = append(vars, currSymbol)
+	}
+
+	return vars, nil
 }
