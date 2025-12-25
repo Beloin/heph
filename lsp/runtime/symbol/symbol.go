@@ -4,7 +4,8 @@ type SymbolKind int
 
 // Kind types
 const (
-	FunctionKind SymbolKind = iota
+	ClassKind SymbolKind = iota
+	FunctionKind
 	VariableKind
 	FieldKind
 )
@@ -27,7 +28,7 @@ type Symbol struct {
 	Signature string
 
 	// Value is the current literal value for a variable, or doc string for functions
-	Value string
+	Value     string
 	DocString string
 
 	Position Position

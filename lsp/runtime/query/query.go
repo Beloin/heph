@@ -3,6 +3,8 @@ package query
 import (
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 
 	"github.com/hephbuild/heph/lsp/runtime/symbol"
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
@@ -41,10 +43,98 @@ const variablesQuery = `
 )
 `
 
+const classQuery = `
+(class_definition
+  name: (identifier) @class.name
+  body: (block .
+		((expression_statement
+			(string (string_content) )) @class.docstring)?
+		(function_definition
+			name: (identifier) @method.name
+			parameters: (parameters) @method.params
+			body: (block .
+				(expression_statement
+					(string (string_content) @method.docstring))?))*))
+`
+
 var ErrEmptyTreeError = errors.New("empty tree")
 
 // TODO: bsena; See how to use the global server
 var lang = tree_sitter.NewLanguage(tree_sitter_python.Language())
+
+// TODO: bsena; For classes extract methods and attributes running a subquery inside each match??
+func ExtractClass(tree *tree_sitter.Tree, text []byte) ([]*symbol.Symbol, error) {
+	if tree.RootNode() == nil {
+		return nil, ErrEmptyTreeError
+	}
+
+	query, err := tree_sitter.NewQuery(lang, classQuery)
+	if err != nil {
+		return nil, err
+	}
+
+	defer query.Close()
+
+	cursor := tree_sitter.NewQueryCursor()
+	defer cursor.Close()
+
+	classes := []*symbol.Symbol{}
+	matches := cursor.Matches(query, tree.RootNode(), text)
+	for match := matches.Next(); match != nil; match = matches.Next() {
+		currClass := &symbol.Symbol{Kind: symbol.ClassKind}
+		methodMap := map[string]*symbol.Symbol{}
+		var currentMethod *string
+		for _, capture := range match.Captures {
+			patternName := query.CaptureNames()[capture.Index]
+			nodeRange := capture.Node.Range()
+			patternValue := capture.Node.Utf8Text(text)
+
+			switch patternName {
+			case "class.name":
+				currClass.Position.RowStart = nodeRange.StartPoint.Row
+				currClass.Position.ColumnStart = nodeRange.StartPoint.Column
+				currClass.Name = patternValue
+				currClass.Signature = currClass.Name + patternValue
+			case "class.docstring":
+				currClass.DocString = patternValue
+			case "method.name":
+				p := patternValue
+				currentMethod = &p
+
+				methodMap[*currentMethod] = &symbol.Symbol{
+					Name: patternValue,
+					Position: symbol.Position{
+						RowStart:    nodeRange.StartPoint.Row,
+						ColumnStart: nodeRange.StartPoint.Column,
+					},
+				}
+			case "method.params":
+				if currentMethod != nil {
+					s := methodMap[*currentMethod]
+					s.Signature = s.Name + patternValue
+				}
+			case "method.docstring":
+				if currentMethod != nil {
+					s := methodMap[*currentMethod]
+					s.DocString = patternValue
+				}
+			}
+
+			fmt.Printf(
+				"Match %d, Capture %d (%s): %s\n",
+				match.PatternIndex,
+				capture.Index,
+				patternName,
+				patternValue,
+			)
+		}
+
+		currClass.Symbols = slices.Collect(maps.Values(methodMap))
+		classes = append(classes, currClass)
+	}
+
+	return classes, nil
+}
 
 func ExtractFunctions(tree *tree_sitter.Tree, text []byte) ([]*symbol.Symbol, error) {
 	if tree.RootNode() == nil {

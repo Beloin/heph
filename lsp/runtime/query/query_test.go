@@ -17,6 +17,14 @@ var pythonTest []byte
 //go:embed testdata/class_test.py
 var classTest []byte
 
+var (
+	functionNames = []string{"my_custom_function", "my_other_function"}
+	testVariables = []string{"my_custom_variable", "my_new_var", "my_custom_result"}
+	classes       = []string{"MyClass", "MySecondClass"}
+	class0Methods = []string{"mymethod", "my_second_method"}
+	class1Methods = []string{"method_in_second_class", "static_method_in_class"}
+)
+
 type QuerySuite struct {
 	suite.Suite
 }
@@ -30,6 +38,34 @@ func (suite *QuerySuite) newParser() *tree_sitter.Parser {
 	return parser
 }
 
+func (suite *QuerySuite) TestClassQuery() {
+	parser := suite.newParser()
+	classTree := parser.Parse(classTest, nil)
+
+	symbols, err := query.ExtractClass(classTree, classTest)
+	suite.Require().NoError(err)
+	suite.Require().NotNil(symbols)
+	suite.Require().NotEmpty(symbols)
+
+	classesNames := []string{}
+	methods := [][]string{}
+	for _, s := range symbols {
+		classesNames = append(classesNames, s.Name)
+		currentMethods := []string{}
+		for _, m := range s.Symbols {
+			currentMethods = append(currentMethods, m.Name)
+		}
+
+		methods = append(methods, currentMethods)
+	}
+
+	suite.Require().Len(methods, 2)
+
+	suite.Require().ElementsMatch(classes, classesNames)
+	suite.Require().ElementsMatch(class0Methods, methods[0])
+	suite.Require().ElementsMatch(class1Methods, methods[1])
+}
+
 func (suite *QuerySuite) TestFunctionQuery() {
 	parser := suite.newParser()
 	pythonTree := parser.Parse(pythonTest, nil)
@@ -37,8 +73,14 @@ func (suite *QuerySuite) TestFunctionQuery() {
 	symbols, err := query.ExtractFunctions(pythonTree, pythonTest)
 	suite.Require().NoError(err)
 
+	names := []string{}
+	for _, s := range symbols {
+		names = append(names, s.Name)
+	}
+
 	suite.Require().NotNil(symbols)
 	suite.Require().NotEmpty(symbols)
+	suite.Require().ElementsMatch(functionNames, names)
 }
 
 func (suite *QuerySuite) TestVariablesQuery() {
@@ -48,19 +90,14 @@ func (suite *QuerySuite) TestVariablesQuery() {
 	symbols, err := query.ExtractVariables(pythonTree, pythonTest)
 	suite.Require().NoError(err)
 
+	names := []string{}
+	for _, s := range symbols {
+		names = append(names, s.Name)
+	}
+
 	suite.Require().NotNil(symbols)
 	suite.Require().NotEmpty(symbols)
-}
-
-func (suite *QuerySuite) TestClassQuery() {
-	parser := suite.newParser()
-	classTree := parser.Parse(classTest, nil)
-
-	symbols, err := query.ExtractFunctions(classTree, classTest)
-	suite.Require().NoError(err)
-
-	suite.Require().NotNil(symbols)
-	suite.Require().Empty(symbols)
+	suite.Require().ElementsMatch(testVariables, names)
 }
 
 func TestQuerySuite(t *testing.T) {
