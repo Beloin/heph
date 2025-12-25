@@ -10,6 +10,7 @@ import (
 	"github.com/hephbuild/heph/lsp/capabilities/lang"
 	"github.com/hephbuild/heph/lsp/runtime"
 	"github.com/hephbuild/heph/vfssimple"
+
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 	tree_sitter_python "github.com/tree-sitter/tree-sitter-python/bindings/go"
 
@@ -20,9 +21,6 @@ import (
 	protocol "github.com/tliron/glsp/protocol_3_16"
 	"github.com/tliron/glsp/server"
 )
-
-// TODO: bsena; NOW WE WILL IMPLEMENT FROM SCRATCH, USE https://github.com/tliron/glsp/ TO IMPLEMENT
-// This will help to have custom capability and our own control over builtins
 
 const HephLanguage = "heph"
 
@@ -87,7 +85,10 @@ func newHephLSP(root *hroot.State, debug bool) (*hephLSP, error) {
 	}
 
 	// TODO: bsena; see if we can re-use parsers or not
-	manager := runtime.NewManager(parser)
+	manager, err := runtime.NewManager(parser)
+	if err != nil {
+		return nil, err
+	}
 
 	// TODO: bsena; Add here custom capabilities and handler methods for our server
 	handler := &protocol.Handler{
@@ -98,7 +99,6 @@ func newHephLSP(root *hroot.State, debug bool) (*hephLSP, error) {
 
 		// Sync
 		TextDocumentDidOpen: capabilities.TextDocumentDidOpenWrapper(manager),
-		
 
 		// Lang features
 		TextDocumentCompletion: lang.TextDocumentCompletionFuncWrapper(manager),

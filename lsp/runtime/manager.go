@@ -21,9 +21,13 @@ type Manager struct {
 	Parser         *tree_sitter.Parser
 }
 
-func NewManager(parser *tree_sitter.Parser) *Manager {
-	builtins := builtin.ParseBuiltins(parser)
-	return &Manager{DocumentMap: map[protocol.DocumentUri]*docTuple{}, Parser: parser, BuiltinSymbols: builtins}
+func NewManager(parser *tree_sitter.Parser) (*Manager, error) {
+	builtins, err := builtin.ParseBuiltins(parser)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Manager{DocumentMap: map[protocol.DocumentUri]*docTuple{}, Parser: parser, BuiltinSymbols: builtins}, nil
 }
 
 // GetDocument queries and look for an existing document in Manager.

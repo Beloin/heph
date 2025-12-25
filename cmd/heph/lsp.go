@@ -30,7 +30,8 @@ var servelspCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		// TODO: bsena; Probably we need to add options such as "--debug", "--address" and "--verbose"
 		// TODO: bsena; To implement more about the starlark, see --builtin-paths
-		// This is probably where we can add the `target`, builtin functions etc
+
+		// TODO: bsena; glsp stoles our ^C, only close with ^D, fix it
 		ctx := cmd.Context()
 
 		bs, err := bootstrapInit(ctx)

@@ -4,9 +4,8 @@ import (
 	_ "embed"
 	"slices"
 
-	"github.com/hephbuild/heph/lsp/runtime/machine"
+	"github.com/hephbuild/heph/lsp/runtime/query"
 	"github.com/hephbuild/heph/lsp/runtime/symbol"
-	"github.com/hephbuild/heph/lsp/runtime/traverse"
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 )
 
@@ -20,8 +19,7 @@ var helpers []byte
 var pybt []byte
 
 // ParseBuiltins Parses builtin files and extracts their symbols.
-// TODO: bsena; Should we use query instead of parsing all symbols?
-func ParseBuiltins(parser *tree_sitter.Parser) []*symbol.Symbol {
+func ParseBuiltins(parser *tree_sitter.Parser) ([]*symbol.Symbol, error) {
 	targetTree := parser.Parse(target, nil)
 	defer targetTree.Close()
 
@@ -31,29 +29,18 @@ func ParseBuiltins(parser *tree_sitter.Parser) []*symbol.Symbol {
 	pybtTree := parser.Parse(pybt, nil)
 	defer pybtTree.Close()
 
-	targetSymbols := ExtractSymbols(targetTree, target)
-	helpersSymbols := ExtractSymbols(helpersTree, helpers)
-	pybtSymbols := ExtractSymbols(pybtTree, pybt)
+	targetSymbols, err := query.QuerySymbols(targetTree, target)
+	if err != nil {
+		return nil, err
+	}
+	helpersSymbols, err := query.QuerySymbols(helpersTree, helpers)
+	if err != nil {
+		return nil, err
+	}
+	pybtSymbols, err := query.QuerySymbols(pybtTree, pybt)
+	if err != nil {
+		return nil, err
+	}
 
-	return slices.Concat(targetSymbols, helpersSymbols, pybtSymbols)
-}
-
-// ExtractSymbols extracts symbols from a given tree and raw byte slice.
-func ExtractSymbols(tree *tree_sitter.Tree, raw []byte) []*symbol.Symbol {
-	machine := machine.NewMachine(raw)
-	state := machine.Start()
-
-	symbols := make([]*symbol.Symbol, 0)
-	traverse.Traverse(tree, func(node *tree_sitter.Node) bool {
-		state = state(node)
-
-		if machine.HasSymbol {
-			symbolCp := machine.Symbol
-			symbols = append(symbols, &symbolCp)
-		}
-
-		return true
-	})
-
-	return symbols
+	return slices.Concat(targetSymbols, helpersSymbols, pybtSymbols), nil
 }

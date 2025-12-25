@@ -13,6 +13,9 @@ func MachineKindToCompletionKind(kind symbol.SymbolKind) protocol.CompletionItem
 	case symbol.VariableKind:
 		return protocol.CompletionItemKindVariable
 
+	case symbol.ClassKind:
+		return protocol.CompletionItemKindClass
+
 	default:
 		return protocol.CompletionItemKindValue
 	}

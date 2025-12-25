@@ -2,7 +2,6 @@ package query
 
 import (
 	"errors"
-	"fmt"
 	"maps"
 	"slices"
 
@@ -62,7 +61,29 @@ var ErrEmptyTreeError = errors.New("empty tree")
 // TODO: bsena; See how to use the global server
 var lang = tree_sitter.NewLanguage(tree_sitter_python.Language())
 
-// TODO: bsena; For classes extract methods and attributes running a subquery inside each match??
+func QuerySymbols(tree *tree_sitter.Tree, text []byte) ([]*symbol.Symbol, error) {
+	symbols := []*symbol.Symbol{}
+	classSymbols, err := ExtractClass(tree, text)
+	if err != nil {
+		return nil, err
+	}
+	symbols = append(symbols, classSymbols...)
+
+	funcSymbols, err := ExtractFunctions(tree, text)
+	if err != nil {
+		return nil, err
+	}
+	symbols = append(symbols, funcSymbols...)
+
+	varSymbols, err := ExtractVariables(tree, text)
+	if err != nil {
+		return nil, err
+	}
+	symbols = append(symbols, varSymbols...)
+
+	return symbols, nil
+}
+
 func ExtractClass(tree *tree_sitter.Tree, text []byte) ([]*symbol.Symbol, error) {
 	if tree.RootNode() == nil {
 		return nil, ErrEmptyTreeError
@@ -119,14 +140,6 @@ func ExtractClass(tree *tree_sitter.Tree, text []byte) ([]*symbol.Symbol, error)
 					s.DocString = patternValue
 				}
 			}
-
-			fmt.Printf(
-				"Match %d, Capture %d (%s): %s\n",
-				match.PatternIndex,
-				capture.Index,
-				patternName,
-				patternValue,
-			)
 		}
 
 		currClass.Symbols = slices.Collect(maps.Values(methodMap))
@@ -167,17 +180,10 @@ func ExtractFunctions(tree *tree_sitter.Tree, text []byte) ([]*symbol.Symbol, er
 				currSymbol.Name = patternValue
 			case "function.params":
 				currSymbol.Signature = currSymbol.Name + patternValue
-			case "function.docString":
+			case "function.docstring":
 				currSymbol.DocString = patternValue
 			}
 
-			fmt.Printf(
-				"Match %d, Capture %d (%s): %s\n",
-				match.PatternIndex,
-				capture.Index,
-				patternName,
-				patternValue,
-			)
 		}
 
 		functions = append(functions, currSymbol)
@@ -221,13 +227,6 @@ func ExtractVariables(tree *tree_sitter.Tree, text []byte) ([]*symbol.Symbol, er
 				currSymbol.Value = patternValue
 			}
 
-			fmt.Printf(
-				"Match %d, Capture %d (%s): %s\n",
-				match.PatternIndex,
-				capture.Index,
-				patternName,
-				patternValue,
-			)
 		}
 
 		vars = append(vars, currSymbol)

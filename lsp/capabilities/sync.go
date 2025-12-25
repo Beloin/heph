@@ -57,7 +57,11 @@ func TextDocumentDidOpenWrapper(manager *runtime.Manager) protocol.TextDocumentD
 			return ErrInvalidTree
 		}
 
-		newDoc := document.NewDocument(newTree, bts)
+		newDoc, err := document.NewDocument(newTree, bts)
+		if err != nil {
+			return err
+		}
+
 		version := params.TextDocument.Version
 		manager.SetDocument(params.TextDocument.URI, version, newDoc)
 
