@@ -22,12 +22,12 @@ var (
 
 var SyncLogger = commonlog.GetLogger("sync")
 
-// protocol.TextDocumentDidOpenFunc
-// protocol.TextDocumentDidChangeFunc
+// protocol.TextDocumentDidOpenFunc            | Mandatory
+// protocol.TextDocumentDidChangeFunc          | Mandatory
 // protocol.TextDocumentWillSaveFunc
 // protocol.TextDocumentWillSaveWaitUntilFunc
 // protocol.TextDocumentDidSaveFunc
-// protocol.TextDocumentDidCloseFunc
+// protocol.TextDocumentDidCloseFunc           | Mandatory
 
 // TODO: bsena; split this better so we can test it
 
