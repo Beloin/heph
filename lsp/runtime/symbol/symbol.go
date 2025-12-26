@@ -27,7 +27,7 @@ type Symbol struct {
 	Kind      SymbolKind
 	Signature string
 
-	// Value is the current literal value for a variable, or doc string for functions
+	// Value is the current literal value for a variable
 	Value     string
 	DocString string
 
@@ -35,7 +35,7 @@ type Symbol struct {
 
 	SignaturePosition rawPosition
 
-	Symbols []*Symbol // TODO: bsena; inner field
+	Symbols []*Symbol
 }
 
 func (s *Symbol) Is(kind SymbolKind) bool {

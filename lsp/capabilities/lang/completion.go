@@ -9,13 +9,12 @@ import (
 // protocol.TextDocumentCompletionFunc
 
 func TextDocumentCompletionFuncWrapper(manager *runtime.Manager) protocol.TextDocumentCompletionFunc {
-	// TODO: bsena; Add builins as docs in manager doc map like heph://builtin
 	return func(context *glsp.Context, params *protocol.CompletionParams) (any, error) {
-		// TODO: search in manager
+		// TODO: put the first from this uri
 		// params.TextDocument.URI
 		var completionItems []protocol.CompletionItem
 
-		for _, symbol := range manager.BuiltinSymbols {
+		for _, symbol := range manager.AllLoadedSymbols() {
 			name := symbol.Name
 			sig := symbol.Signature
 			doc := symbol.DocString

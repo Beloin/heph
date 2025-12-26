@@ -1,6 +1,8 @@
 package runtime
 
 import (
+	"slices"
+
 	"github.com/hephbuild/heph/lsp/runtime/builtin"
 	"github.com/hephbuild/heph/lsp/runtime/document"
 	"github.com/hephbuild/heph/lsp/runtime/symbol"
@@ -50,4 +52,13 @@ func (m *Manager) SetDocument(uri protocol.DocumentUri, version protocol.Integer
 			version:  version,
 		}
 	}
+}
+
+func (m *Manager) AllLoadedSymbols() []*symbol.Symbol {
+	allSymbols := m.BuiltinSymbols
+	for _, doc := range m.DocumentMap {
+		allSymbols = slices.Concat(allSymbols, doc.Symbols)
+	}
+
+	return allSymbols
 }

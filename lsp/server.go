@@ -6,10 +6,11 @@ import (
 	"sync"
 
 	"github.com/hephbuild/heph/hroot"
-	"github.com/hephbuild/heph/lsp/capabilities"
-	"github.com/hephbuild/heph/lsp/capabilities/lang"
 	"github.com/hephbuild/heph/lsp/runtime"
 	"github.com/hephbuild/heph/vfssimple"
+
+	"github.com/hephbuild/heph/lsp/capabilities/lang"
+	docsync "github.com/hephbuild/heph/lsp/capabilities/sync"
 
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 	tree_sitter_python "github.com/tree-sitter/tree-sitter-python/bindings/go"
@@ -98,10 +99,14 @@ func newHephLSP(root *hroot.State, debug bool) (*hephLSP, error) {
 		SetTrace:    lsp.wrapSetTrace(),
 
 		// Sync
-		TextDocumentDidOpen: capabilities.TextDocumentDidOpenWrapper(manager),
+		TextDocumentDidOpen:   docsync.TextDocumentDidOpenWrapper(manager),
+		TextDocumentDidChange: docsync.TextDocumentDidChangeFuncWrapper(manager),
 
 		// Lang features
 		TextDocumentCompletion: lang.TextDocumentCompletionFuncWrapper(manager),
+		// TextDocumentHover:      lang.TextDocumentHoverFuncWrapper(manager),
+		// TextDocumentReferences:  lang.TextDocumentReferencesFuncWrapper(manager),
+		// TextDocumentDeclaration: lang.TextDocumentDeclarationFuncWrapper(manager),
 	}
 	server := server.NewServer(handler, HephLanguage, debug)
 
@@ -118,6 +123,7 @@ func configureLogs(root *hroot.State, debug bool) error {
 	}
 
 	// TODO: bsena; Find a way to prevent using this logger
+	// and use default heph logger
 	logpath := root.Home.Join("lsplogs")
 	fullpath := logpath.Abs()
 	dst, err := vfssimple.NewFile("file://" + fullpath)
