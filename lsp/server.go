@@ -94,6 +94,8 @@ func newHephLSP(root *hroot.State, debug bool) (*hephLSP, error) {
 	// TODO: bsena; Add here custom capabilities and handler methods for our server
 	handler := &protocol.Handler{
 		// TODO: When initialized, look from the root all BUILD files extracting all symbols for the manager
+
+		// Lifecycle
 		Initialize:  lsp.wrapInitialize(),
 		Initialized: lsp.wrapInitialized(),
 		Shutdown:    lsp.wrapShutdown(),
