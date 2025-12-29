@@ -46,6 +46,32 @@ func TestByteReplace(t *testing.T) {
 	require.Equal(t, expectedText, actualText)
 }
 
+// func TestByteReplaceWithNewLines(t *testing.T) {
+// 	// UTF-8
+// 	currText := "def hello():\n  \"\"\"\n  \"\"\"\n"
+// 	newText := "\n  \n"
+// 	currBytes := []byte(currText)
+// 	newBytes := []byte(newText)
+// 	insertedArray := sync.ParseNewBytes(currBytes, newBytes, 24, 25)
+
+// 	expectedText := "def hello():\n  \"\"\"\n\n  \n\"\"\"\n"
+// 	actualText := string(insertedArray)
+// 	require.Equal(t, expectedText, actualText)
+// }
+
+func TestByteReplaceWithInsert(t *testing.T) {
+	// UTF-8
+	currText := "def hello_friends():"
+	newText := "hi_world"
+	currBytes := []byte(currText)
+	newBytes := []byte(newText)
+	insertedArray := sync.ParseNewBytes(currBytes, newBytes, 4, 9)
+
+	expectedText := "def hi_world_friends():"
+	actualText := string(insertedArray)
+	require.Equal(t, expectedText, actualText)
+}
+
 func TestByteRemove(t *testing.T) {
 	// UTF-8
 	currText := "def hello_world():"

@@ -2,7 +2,6 @@ package sync
 
 import (
 	"errors"
-	"slices"
 
 	"github.com/hephbuild/heph/lsp/runtime"
 	"github.com/hephbuild/heph/lsp/runtime/document"
@@ -114,9 +113,8 @@ func TextDocumentDidChangeFuncWrapper(manager *runtime.Manager) protocol.TextDoc
 				}
 
 				doc.Tree.Edit(&editInput)
-				// TODO: bsena; Deletion is not working
-				newText := CopyInsertByteArray(doc.Text, insertBytes, startByteOffset, endByteOffset)
-				SyncLogger.Noticef("TextDocumentContentChangeEvent: newtxt=\n%s", string(newText))
+				newText := ParseNewBytes(doc.Text, insertBytes, startByteOffset, endByteOffset)
+				SyncLogger.Noticef("TextDocumentContentChangeEvent: newtxt=\n%q", string(newText))
 				newTree := parser.Parse(newText, doc.Tree)
 
 				_, err := doc.SwapTree(newTree, newText)
@@ -144,6 +142,7 @@ func TextDocumentDidChangeFuncWrapper(manager *runtime.Manager) protocol.TextDoc
 	}
 }
 
+// TODO: bsena; later we cannot work copying arrays, what if file is just too big? Change array inplace?
 func ParseNewBytes(current, insert []byte, offsetStart, offsetEnd int) []byte {
 	diff := offsetEnd - offsetStart
 	newLen := len(current) + len(insert) - diff
@@ -164,6 +163,11 @@ func ParseNewBytes(current, insert []byte, offsetStart, offsetEnd int) []byte {
 		return newSlice
 	}
 
+	// TODO: THIS IS WRONG, THERE'S SOMETHING I AM MISSING
+	// Maybe insert isint allways like this: example:
+	// index=35, end=51 lenbytes=4, len=4, txt="\n  \n"<EOF>
+	// but maybe this is actually a replace
+
 	// Insert
 	if diff == 0 {
 		// Insert
@@ -177,7 +181,7 @@ func ParseNewBytes(current, insert []byte, offsetStart, offsetEnd int) []byte {
 				continue
 			}
 
-			newSlice[i] = current[currentIndex]
+			newSlice[i] = current[currentIndex] // breaking here
 			currentIndex++
 		}
 
@@ -185,60 +189,34 @@ func ParseNewBytes(current, insert []byte, offsetStart, offsetEnd int) []byte {
 	}
 
 	// Replace
-	copy(newSlice, current)
+	// TODO: looks like replace can also insert... Pretty neat if not otherwise
+	// copy(newSlice, current)
+	// I think we can use this for all (except delete)
 	insertIndex := 0
-	for i := offsetStart; i < offsetEnd; i++ {
-		newSlice[i] = insert[insertIndex]
-		insertIndex++
-	}
+	currentIndex := 0
+	for i := 0; i < newLen; i++ {
+		if i >= offsetStart {
+			// Replace
+			if i < offsetEnd {
+				newSlice[i] = insert[insertIndex]
+				insertIndex++
+				currentIndex++
 
-	return newSlice
-}
-
-// TODO: bsena; later we cannot work copying arrays, what if file is just too big? Change array inplace?
-func CopyInsertByteArray(curr []byte, insertBytes []byte, insertStart, insertEnd int) []byte {
-	// Copy the new edit text
-	diff := insertEnd - insertStart
-	insertLen := len(insertBytes) - diff
-	fullsize := len(curr) + insertLen
-	newSlice := make([]byte, 0, fullsize)
-
-	// TODO: bsena: chec if it really is a corner case
-	// Try to make it work in the same for
-	// Corner case: insertBytes is empty
-	if len(insertBytes) == 0 {
-		clone := slices.Clone(curr)
-		return slices.Concat(clone[:insertStart], clone[insertStart+diff:])
-	}
-
-	// TODO: bsena; we still cannot work with things like
-	// index=31, end=34 lenbytes=6, len=6, txt="\n  \"\"\""<EOF>
-
-	// Insert: diff == 0
-	// index=50, end=50 lenbytes=1, len=1, txt="c"
-	//
-	// Replace: diff > 0
-	// index=50, end=51 lenbytes=1, len=1, txt="h"
-	insertIndex := 0
-	currIndex := 0
-	for i := 0; i < fullsize; i++ {
-		if currIndex >= insertStart && insertIndex < len(insertBytes) {
-			if diff > 0 {
-				currIndex++
+				continue
 			}
 
-			newSlice = append(newSlice, insertBytes[insertIndex])
-			insertIndex++
+			// Insert
+			if insertIndex < len(insert) {
+				newSlice[i] = insert[insertIndex]
+				insertIndex++
 
-			continue
+				continue
+			}
 		}
 
-		if currIndex >= len(curr) {
-			continue
-		}
-
-		newSlice = append(newSlice, curr[currIndex])
-		currIndex++
+		// Copy
+		newSlice[i] = current[currentIndex]
+		currentIndex++
 	}
 
 	return newSlice

@@ -1,6 +1,8 @@
 package document
 
 import (
+	"sync"
+
 	"github.com/hephbuild/heph/lsp/runtime/query"
 	"github.com/hephbuild/heph/lsp/runtime/symbol"
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
@@ -11,6 +13,8 @@ type Document struct {
 	Tree       *tree_sitter.Tree
 	Text       []byte // UTF-16 encoded byte array https://microsoft.github.io/language-server-protocol/specifications/specification-3-16/#textDocuments
 	TextString string // UTF-16 encoded string https://microsoft.github.io/language-server-protocol/specifications/specification-3-16/#textDocuments
+
+	m sync.Mutex
 }
 
 func (d *Document) Close() {
@@ -28,7 +32,8 @@ func NewDocument(tree *tree_sitter.Tree, rawText []byte) (*Document, error) {
 
 // SwapTree atomic swaps current tree and return the closed old tree
 func (d *Document) SwapTree(newT *tree_sitter.Tree, newText []byte) (*tree_sitter.Tree, error) {
-	// TODO: bsena; make it atomic with sync.Mutex and update symbols
+	d.m.Lock()
+	defer d.m.Unlock()
 
 	oldTree := d.Tree
 	oldText := d.Text
