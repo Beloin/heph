@@ -51,7 +51,7 @@ type hephLSP struct {
 }
 
 func NewHephServer(root *hroot.State) (LSPServer, error) {
-	return newHephLSP(root, true)
+	return newHephLSP(root, false)
 }
 
 func (h *hephLSP) Serve(ctx context.Context) error {
@@ -121,8 +121,9 @@ func newHephLSP(root *hroot.State, debug bool) (*hephLSP, error) {
 }
 
 func configureLogs(root *hroot.State, debug bool) error {
-	if !debug {
-		return nil
+	verbosity := 0
+	if debug {
+		verbosity = 2
 	}
 
 	// TODO: bsena; Find a way to prevent using this logger
@@ -135,7 +136,7 @@ func configureLogs(root *hroot.State, debug bool) error {
 	}
 	defer dst.Close()
 
-	commonlog.Configure(2, &fullpath)
+	commonlog.Configure(verbosity, &fullpath)
 
 	return nil
 }

@@ -2,6 +2,7 @@ package sync
 
 import (
 	"errors"
+	"slices"
 
 	"github.com/hephbuild/heph/lsp/runtime"
 	"github.com/hephbuild/heph/lsp/runtime/document"
@@ -33,7 +34,7 @@ var SyncLogger = commonlog.GetLogger("sync")
 
 func TextDocumentDidOpenWrapper(manager *runtime.Manager) protocol.TextDocumentDidOpenFunc {
 	// TODO: bsena; We are panicking when we read invalid file, why?
-	
+
 	return func(context *glsp.Context, params *protocol.DidOpenTextDocumentParams) error {
 		SyncLogger.Noticef("Get File: %s", params.TextDocument.URI)
 
@@ -87,10 +88,11 @@ func TextDocumentDidChangeFuncWrapper(manager *runtime.Manager) protocol.TextDoc
 				text := doc.TextString
 				insertBytes := []byte(event.Text)
 
-				SyncLogger.Noticef("TextDocumentContentChangeEvent: txt=%s", text)
-
 				startByteOffset, endByteOffset := event.Range.IndexesIn(text)
 				endByte := uint(endByteOffset) + uint(len(insertBytes))
+
+				SyncLogger.Noticef("TextDocumentContentChangeEvent: index=%d, end=%d lenbytes=%d, len=%d, txt=\n%q<EOF>",
+					startByteOffset, endByteOffset, len(insertBytes), len(event.Text), event.Text)
 
 				editInput := tree_sitter.InputEdit{
 					StartByte:  uint(startByteOffset),
@@ -112,8 +114,9 @@ func TextDocumentDidChangeFuncWrapper(manager *runtime.Manager) protocol.TextDoc
 				}
 
 				doc.Tree.Edit(&editInput)
-				newText := InsertByteArray(doc.Text, insertBytes, startByteOffset)
-				SyncLogger.Noticef("TextDocumentContentChangeEvent: newtxt=%s", string(newText))
+				// TODO: bsena; Deletion is not working
+				newText := CopyInsertByteArray(doc.Text, insertBytes, startByteOffset, endByteOffset)
+				SyncLogger.Noticef("TextDocumentContentChangeEvent: newtxt=\n%s", string(newText))
 				newTree := parser.Parse(newText, doc.Tree)
 
 				_, err := doc.SwapTree(newTree, newText)
@@ -124,7 +127,7 @@ func TextDocumentDidChangeFuncWrapper(manager *runtime.Manager) protocol.TextDoc
 			}
 
 			if event, ok := change.(protocol.TextDocumentContentChangeEventWhole); ok {
-				SyncLogger.Info("TextDocumentContentChangeEvent: txt=%s", event.Text)
+				SyncLogger.Info("TextDocumentContentChangeEventWhole: txt=\n%s", event.Text)
 
 				bts := []byte(event.Text)
 				newTree := parser.Parse(bts, nil)
@@ -141,22 +144,101 @@ func TextDocumentDidChangeFuncWrapper(manager *runtime.Manager) protocol.TextDoc
 	}
 }
 
-func InsertByteArray(curr []byte, insertBytes []byte, insertStart int) []byte {
-	// Copy the new edit text
-	fullsize := len(curr) + len(insertBytes)
-	newSlice := make([]byte, 0, fullsize)
-	insertIndex := 0
+func ParseNewBytes(current, insert []byte, offsetStart, offsetEnd int) []byte {
+	diff := offsetEnd - offsetStart
+	newLen := len(current) + len(insert) - diff
+	newSlice := make([]byte, newLen)
 
+	// Corner case: empty insert "" means delete
+	if len(insert) == 0 {
+		insertIndex := 0
+		for i := 0; i < len(current); i++ {
+			if i >= offsetStart && i < offsetEnd {
+				continue
+			}
+
+			newSlice[insertIndex] = current[i]
+			insertIndex++
+		}
+
+		return newSlice
+	}
+
+	// Insert
+	if diff == 0 {
+		// Insert
+		insertIndex := 0
+		currentIndex := 0
+		for i := 0; i < newLen; i++ {
+			if i >= offsetStart && i < offsetEnd+len(insert) {
+				newSlice[i] = insert[insertIndex]
+				insertIndex++
+
+				continue
+			}
+
+			newSlice[i] = current[currentIndex]
+			currentIndex++
+		}
+
+		return newSlice
+	}
+
+	// Replace
+	copy(newSlice, current)
+	insertIndex := 0
+	for i := offsetStart; i < offsetEnd; i++ {
+		newSlice[i] = insert[insertIndex]
+		insertIndex++
+	}
+
+	return newSlice
+}
+
+// TODO: bsena; later we cannot work copying arrays, what if file is just too big? Change array inplace?
+func CopyInsertByteArray(curr []byte, insertBytes []byte, insertStart, insertEnd int) []byte {
+	// Copy the new edit text
+	diff := insertEnd - insertStart
+	insertLen := len(insertBytes) - diff
+	fullsize := len(curr) + insertLen
+	newSlice := make([]byte, 0, fullsize)
+
+	// TODO: bsena: chec if it really is a corner case
+	// Try to make it work in the same for
+	// Corner case: insertBytes is empty
+	if len(insertBytes) == 0 {
+		clone := slices.Clone(curr)
+		return slices.Concat(clone[:insertStart], clone[insertStart+diff:])
+	}
+
+	// TODO: bsena; we still cannot work with things like
+	// index=31, end=34 lenbytes=6, len=6, txt="\n  \"\"\""<EOF>
+
+	// Insert: diff == 0
+	// index=50, end=50 lenbytes=1, len=1, txt="c"
+	//
+	// Replace: diff > 0
+	// index=50, end=51 lenbytes=1, len=1, txt="h"
+	insertIndex := 0
+	currIndex := 0
 	for i := 0; i < fullsize; i++ {
-		if i >= insertStart && insertIndex < len(insertBytes) {
+		if currIndex >= insertStart && insertIndex < len(insertBytes) {
+			if diff > 0 {
+				currIndex++
+			}
+
 			newSlice = append(newSlice, insertBytes[insertIndex])
 			insertIndex++
+
 			continue
 		}
 
-		if i < len(curr) {
-			newSlice = append(newSlice, curr[i])
+		if currIndex >= len(curr) {
+			continue
 		}
+
+		newSlice = append(newSlice, curr[currIndex])
+		currIndex++
 	}
 
 	return newSlice
