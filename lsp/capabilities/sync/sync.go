@@ -163,35 +163,7 @@ func ParseNewBytes(current, insert []byte, offsetStart, offsetEnd int) []byte {
 		return newSlice
 	}
 
-	// TODO: THIS IS WRONG, THERE'S SOMETHING I AM MISSING
-	// Maybe insert isint allways like this: example:
-	// index=35, end=51 lenbytes=4, len=4, txt="\n  \n"<EOF>
-	// but maybe this is actually a replace
-
-	// Insert
-	if diff == 0 {
-		// Insert
-		insertIndex := 0
-		currentIndex := 0
-		for i := 0; i < newLen; i++ {
-			if i >= offsetStart && i < offsetEnd+len(insert) {
-				newSlice[i] = insert[insertIndex]
-				insertIndex++
-
-				continue
-			}
-
-			newSlice[i] = current[currentIndex] // breaking here
-			currentIndex++
-		}
-
-		return newSlice
-	}
-
 	// Replace
-	// TODO: looks like replace can also insert... Pretty neat if not otherwise
-	// copy(newSlice, current)
-	// I think we can use this for all (except delete)
 	insertIndex := 0
 	currentIndex := 0
 	for i := 0; i < newLen; i++ {
