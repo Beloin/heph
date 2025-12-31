@@ -9,6 +9,7 @@ import (
 )
 
 type Document struct {
+	// TODO: bsena; Maybe a tree would be better here
 	Symbols    []*symbol.Symbol // TODO: bsena; find a way to index this
 	Tree       *tree_sitter.Tree
 	Text       []byte // UTF-16 encoded byte array https://microsoft.github.io/language-server-protocol/specifications/specification-3-16/#textDocuments
@@ -65,4 +66,24 @@ func (d *Document) extractSymbols() error {
 	d.Symbols = symbols
 
 	return nil
+}
+
+func (d *Document) Query(symbolName string) (*symbol.Symbol, bool) {
+	// TODO: bsena; use a prefix tree and have ALL nodes, even child nodes
+	// in that tree
+	return findSymbol(d.Symbols, symbolName)
+}
+
+func findSymbol(symbols []*symbol.Symbol, sName string) (*symbol.Symbol, bool) {
+	for _, symbol := range symbols {
+		if symbol.FullName == sName {
+			return symbol, true
+		}
+
+		if childS, found := findSymbol(symbol.Symbols, sName); found {
+			return childS, true
+		}
+	}
+
+	return nil, false
 }

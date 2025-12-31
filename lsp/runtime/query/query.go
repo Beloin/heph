@@ -12,6 +12,13 @@ import (
 
 // Examples in https://github.com/tree-sitter/go-tree-sitter/blob/master/query_test.go
 
+// TODO: Why don't use starlark parser?
+// e.g. syntax.Parse(filename string, src interface{}, mode syntax.Mode)
+// - We would need a parser that parses blocks of code?
+// - We would need in-memory parse
+// - We won't have custom queries
+// - Parsers generate AST not an CST
+
 const functionQuery = `
 (function_definition
   name: (identifier) @function.name
@@ -115,7 +122,8 @@ func ExtractClass(tree *tree_sitter.Tree, text []byte) ([]*symbol.Symbol, error)
 				currClass.Position.RowStart = nodeRange.StartPoint.Row
 				currClass.Position.ColumnStart = nodeRange.StartPoint.Column
 				currClass.Name = patternValue
-				currClass.Signature = currClass.Name + patternValue
+				currClass.FullName = patternValue
+				currClass.Signature = currClass.Name
 			case "class.docstring":
 				currClass.DocString = patternValue
 			case "method.name":
@@ -123,7 +131,8 @@ func ExtractClass(tree *tree_sitter.Tree, text []byte) ([]*symbol.Symbol, error)
 				currentMethod = &p
 
 				methodMap[*currentMethod] = &symbol.Symbol{
-					Name: patternValue,
+					Name:     patternValue,
+					FullName: currClass.Name + "." + patternValue,
 					Position: symbol.Position{
 						RowStart:    nodeRange.StartPoint.Row,
 						ColumnStart: nodeRange.StartPoint.Column,
@@ -178,6 +187,7 @@ func ExtractFunctions(tree *tree_sitter.Tree, text []byte) ([]*symbol.Symbol, er
 				currSymbol.Position.RowStart = nodeRange.StartPoint.Row
 				currSymbol.Position.ColumnStart = nodeRange.StartPoint.Column
 				currSymbol.Name = patternValue
+				currSymbol.FullName = patternValue
 			case "function.params":
 				currSymbol.Signature = currSymbol.Name + patternValue
 			case "function.docstring":
@@ -211,7 +221,6 @@ func ExtractVariables(tree *tree_sitter.Tree, text []byte) ([]*symbol.Symbol, er
 	vars := []*symbol.Symbol{}
 	matches := cursor.Matches(query, root, text)
 	for match := matches.Next(); match != nil; match = matches.Next() {
-		// TODO: how to work with repeated symbols?
 
 		currSymbol := &symbol.Symbol{Kind: symbol.VariableKind}
 		for _, capture := range match.Captures {
@@ -223,6 +232,7 @@ func ExtractVariables(tree *tree_sitter.Tree, text []byte) ([]*symbol.Symbol, er
 				currSymbol.DocString = patternValue
 			case "var.name":
 				currSymbol.Name = patternValue
+				currSymbol.FullName = patternValue
 			case "var.value":
 				currSymbol.Value = patternValue
 			}

@@ -108,7 +108,7 @@ func TextDocumentDidChangeFuncWrapper(manager *runtime.Manager) protocol.TextDoc
 					},
 					NewEndPosition: tree_sitter.Point{
 						Row:    uint(event.Range.End.Line),
-						Column: endByte * 2, // TODO: bsena; this is wrong, fix it
+						Column: endByte * 2, // TODO: bsena; this is wrong?
 					},
 				}
 
@@ -143,6 +143,7 @@ func TextDocumentDidChangeFuncWrapper(manager *runtime.Manager) protocol.TextDoc
 }
 
 // TODO: bsena; later we cannot work copying arrays, what if file is just too big? Change array inplace?
+// Put this inside runtime?
 func ParseNewBytes(current, insert []byte, offsetStart, offsetEnd int) []byte {
 	diff := offsetEnd - offsetStart
 	newLen := len(current) + len(insert) - diff

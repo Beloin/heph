@@ -95,7 +95,7 @@ type GenSource struct {
 	Sources []Source
 }
 
-// TODO: bsena; Use this to add the built-ins
+// TODO: bsena; Use this to show the target inside doc?
 type Target struct {
 	Name    string
 	Addr    string

@@ -79,6 +79,8 @@ func newHephLSP(root *hroot.State, debug bool) (*hephLSP, error) {
 
 	lsp := &hephLSP{}
 
+	// TODO: See if we can use Startlark tree-sitter
+	// https://github.com/tree-sitter-grammars/tree-sitter-starlark
 	parser := tree_sitter.NewParser()
 	err = parser.SetLanguage(tree_sitter.NewLanguage(tree_sitter_python.Language()))
 	if err != nil {
@@ -107,7 +109,7 @@ func newHephLSP(root *hroot.State, debug bool) (*hephLSP, error) {
 
 		// Lang features
 		TextDocumentCompletion: lang.TextDocumentCompletionFuncWrapper(manager),
-		// TextDocumentHover:      lang.TextDocumentHoverFuncWrapper(manager),
+		TextDocumentHover:      lang.TextDocumentHoverFuncWrapper(manager),
 		// TextDocumentReferences:  lang.TextDocumentReferencesFuncWrapper(manager),
 		// TextDocumentDeclaration: lang.TextDocumentDeclarationFuncWrapper(manager),
 	}

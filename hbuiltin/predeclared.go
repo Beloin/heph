@@ -61,6 +61,8 @@ func computePredeclaredGlobals(config starlark.StringDict) {
 
 var predeclaredFunctionOnce = xsync.Once[starlark.StringDict]{}
 
+// TODO: bsena; How ot make predeclared and globals available to other packages?
+// Maybe wrap StringDict with documentation?
 func predeclared_functions() starlark.StringDict {
 	return predeclaredFunctionOnce.MustDo(func() (starlark.StringDict, error) {
 		p := starlark.StringDict{}
