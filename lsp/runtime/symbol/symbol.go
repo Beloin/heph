@@ -1,5 +1,7 @@
 package symbol
 
+import "strings"
+
 type SymbolKind int
 
 // Kind types
@@ -52,4 +54,37 @@ type Symbol struct {
 
 func (s *Symbol) Is(kind SymbolKind) bool {
 	return s.Kind == kind
+}
+
+// Args return symbol args if Symbol.Kind == FunctionKind
+func (s *Symbol) Args() []string {
+	if !s.Is(FunctionKind) {
+		return nil
+	}
+
+	return extractFunctionArgs(s.Signature)
+}
+
+// extractFunctionArgs extracts arguments from a function signature.
+// Returns the arguments as a slice of strings and a boolean indicating if arguments were found.
+func extractFunctionArgs(signature string) []string {
+	signature, ok := strings.CutPrefix(signature, "(")
+	if !ok {
+		return nil
+	}
+	signature, ok = strings.CutSuffix(signature, ")")
+	if !ok {
+		return nil
+	}
+
+	if signature == "" {
+		return nil
+	}
+
+	args := strings.Split(signature, ",")
+	for i, arg := range args {
+		args[i] = strings.TrimSpace(arg)
+	}
+
+	return args
 }

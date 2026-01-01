@@ -1,8 +1,12 @@
 package lang
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/hephbuild/heph/lsp/runtime"
 	"github.com/hephbuild/heph/lsp/runtime/symbol"
+	"github.com/hephbuild/heph/specs"
 	"github.com/tliron/glsp"
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
@@ -22,6 +26,10 @@ func TextDocumentHoverFuncWrapper(manager *runtime.Manager) protocol.TextDocumen
 		// For now extract the targets from each document loaded into a target spec, so we can load it in runtime?
 		// In the future is the best to have a Heph Server that runs and change at each file change, so we always have a fast
 		// DAG available
+
+		if literal := doc.ExtractCurrentStringLiteral(uint(bytePos)); literal != "" {
+			return createLiteralHover(literal), nil
+		}
 
 		symbolName := doc.ExtractCurrentSymbolName(uint(bytePos))
 
@@ -57,6 +65,26 @@ func createHover(symbol *symbol.Symbol) *protocol.Hover {
 	}
 }
 
+func createLiteralHover(literal string) *protocol.Hover {
+	return &protocol.Hover{
+		Contents: protocol.MarkupContent{
+			Kind:  protocol.MarkupKindMarkdown,
+			Value: parseDefinition(literal),
+		},
+	}
+}
+
 func langDecorate(text, lang string) string {
 	return "```" + lang + "\n" + text + "\n```\n"
+}
+
+func parseDefinition(literal string) string {
+	if s, ok := strings.CutPrefix(literal, "//"); ok {
+		t, err := specs.ParseTargetAddr(s, literal)
+		if err == nil {
+			return fmt.Sprintf("%q Heph from %s", literal, t)
+		}
+	}
+
+	return literal
 }

@@ -58,13 +58,74 @@ func (m *Manager) SetDocument(uri protocol.DocumentUri, version protocol.Integer
 	}
 }
 
-func (m *Manager) AllLoadedSymbols() []*symbol.Symbol {
+type Filter func(s *symbol.Symbol) bool
+
+// TODO: bsena; Return items based on Kind
+func (m *Manager) AllLoadedSymbols(filters ...Filter) []*symbol.Symbol {
 	allSymbols := m.BuiltinSymbols
 	for _, doc := range m.DocumentMap {
-		allSymbols = slices.Concat(allSymbols, doc.Symbols)
+		// allSymbols = slices.Concat(allSymbols, doc.Symbols)
+
+		for _, smb := range doc.Symbols {
+			shoulAdd := true
+			for _, f := range filters {
+				if !f(smb) {
+					shoulAdd = false
+				}
+			}
+
+			if shoulAdd {
+				allSymbols = append(allSymbols, smb)
+			}
+
+		}
 	}
 
 	return allSymbols
+}
+
+type kindStruct struct {
+	AllSymbols []*symbol.Symbol
+	Variables  []*symbol.Symbol
+	Functions  []*symbol.Symbol
+}
+
+func (m *Manager) AllLoadedSymbolsPerKind() kindStruct {
+	allSymbols := []*symbol.Symbol{}
+	vars := []*symbol.Symbol{}
+	funs := []*symbol.Symbol{}
+
+	for _, smb := range m.BuiltinSymbols {
+		switch smb.Kind {
+		case symbol.FunctionKind:
+			funs = append(funs, smb)
+		case symbol.VariableKind:
+			vars = append(vars, smb)
+		default:
+			allSymbols = append(allSymbols, smb)
+		}
+	}
+
+	for _, doc := range m.DocumentMap {
+		for _, smb := range doc.Symbols {
+			switch smb.Kind {
+			case symbol.FunctionKind:
+				funs = append(funs, smb)
+			case symbol.VariableKind:
+				vars = append(vars, smb)
+			default:
+				allSymbols = append(allSymbols, smb)
+			}
+		}
+	}
+
+	allSymbols = slices.Concat(allSymbols, vars, funs)
+
+	return kindStruct{
+		AllSymbols: allSymbols,
+		Variables: vars,
+		Functions: funs,
+	}
 }
 
 // TODO: bsena; use a prefix tree and have ALL nodes, even child nodes
