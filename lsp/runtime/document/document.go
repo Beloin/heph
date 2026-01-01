@@ -9,6 +9,8 @@ import (
 )
 
 type Document struct {
+	Name string
+
 	// TODO: bsena; Maybe a tree would be better here
 	Symbols    []*symbol.Symbol // TODO: bsena; find a way to index this
 	Tree       *tree_sitter.Tree
@@ -22,8 +24,8 @@ func (d *Document) Close() {
 	d.Tree.Close()
 }
 
-func NewDocument(tree *tree_sitter.Tree, rawText []byte) (*Document, error) {
-	doc := &Document{Tree: tree, Text: rawText, TextString: string(rawText)}
+func NewDocument(name string, tree *tree_sitter.Tree, rawText []byte) (*Document, error) {
+	doc := &Document{Name: name, Tree: tree, Text: rawText, TextString: string(rawText)}
 
 	// TODO: bsena; Extract target names here, look for something like target(name="...")
 	err := doc.extractSymbols()
@@ -58,32 +60,21 @@ func (d *Document) SwapTree(newT *tree_sitter.Tree, newText []byte) (*tree_sitte
 }
 
 func (d *Document) extractSymbols() error {
-	symbols, err := query.QuerySymbols(d.Tree, d.Text)
+	symbols, err := query.QuerySymbols(d.Tree, d.Text, d.Name)
 	if err != nil {
 		return err
 	}
 
+	// TODO: bsena; also extract targets here?
 	d.Symbols = symbols
 
 	return nil
 }
 
-func (d *Document) Query(symbolName string) (*symbol.Symbol, bool) {
-	// TODO: bsena; use a prefix tree and have ALL nodes, even child nodes
-	// in that tree
-	return findSymbol(d.Symbols, symbolName)
+func (d *Document) ExtractCurrentSymbolName(byteOffSet uint) string {
+	return query.ExtractCurrentSymbol(d.Tree.RootNode(), d.Text, byteOffSet)
 }
 
-func findSymbol(symbols []*symbol.Symbol, sName string) (*symbol.Symbol, bool) {
-	for _, symbol := range symbols {
-		if symbol.FullName == sName {
-			return symbol, true
-		}
-
-		if childS, found := findSymbol(symbol.Symbols, sName); found {
-			return childS, true
-		}
-	}
-
-	return nil, false
+func (d *Document) Query(symbolName string) (*symbol.Symbol, bool) {
+	return symbol.FindSymbol(d.Symbols, symbolName)
 }

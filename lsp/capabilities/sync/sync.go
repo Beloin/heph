@@ -53,12 +53,11 @@ func TextDocumentDidOpenWrapper(manager *runtime.Manager) protocol.TextDocumentD
 		}
 
 		newTree := parser.Parse(bts, nil)
-		// TODO: bsena; we need better err here
 		if newTree == nil {
 			return ErrInvalidTree
 		}
 
-		newDoc, err := document.NewDocument(newTree, bts)
+		newDoc, err := document.NewDocument(params.TextDocument.URI, newTree, bts)
 		if err != nil {
 			return err
 		}
@@ -70,7 +69,6 @@ func TextDocumentDidOpenWrapper(manager *runtime.Manager) protocol.TextDocumentD
 	}
 }
 
-// TODO: bsena; Not working for now, maybe we need "did open", "did close", save etc
 func TextDocumentDidChangeFuncWrapper(manager *runtime.Manager) protocol.TextDocumentDidChangeFunc {
 	return func(context *glsp.Context, params *protocol.DidChangeTextDocumentParams) error {
 		SyncLogger.Noticef("received TextDocumentDidChange")
@@ -164,18 +162,21 @@ func ParseNewBytes(current, insert []byte, offsetStart, offsetEnd int) []byte {
 		return newSlice
 	}
 
-	// Replace
+	// In the same request we can have Replace or Insert
+	// Replace: offsetEnd > i, meaning we will overwrite any char until that offset
+	// Insert:  Always insert
 	insertIndex := 0
 	currentIndex := 0
 	for i := 0; i < newLen; i++ {
 		if i >= offsetStart {
 			// Replace
+			// TODO: bsena; test this
 			if i < offsetEnd {
-				newSlice[i] = insert[insertIndex]
-				insertIndex++
+				// newSlice[i] = insert[insertIndex]
+				// insertIndex++
 				currentIndex++
 
-				continue
+				// continue
 			}
 
 			// Insert

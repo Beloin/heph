@@ -10,6 +10,10 @@ import (
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 )
 
+const HephLanguage = "heph"
+
+var Version = "0.0.1"
+
 type docTuple struct {
 	*document.Document
 
@@ -61,4 +65,22 @@ func (m *Manager) AllLoadedSymbols() []*symbol.Symbol {
 	}
 
 	return allSymbols
+}
+
+// TODO: bsena; use a prefix tree and have ALL nodes, even child nodes
+// in that tree using Symbol.Fullname as index
+// Also how to work with imports?
+// Probalby this tree will be in Manager's struct
+func (m *Manager) Query(symbolName string) (*symbol.Symbol, bool) {
+	if s, found := symbol.FindSymbol(m.BuiltinSymbols, symbolName); found {
+		return s, true
+	}
+
+	for _, doc := range m.DocumentMap {
+		if s, found := doc.Query(symbolName); found {
+			return s, true
+		}
+	}
+
+	return nil, false
 }

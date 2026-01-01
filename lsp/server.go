@@ -23,10 +23,6 @@ import (
 	"github.com/tliron/glsp/server"
 )
 
-const HephLanguage = "heph"
-
-var Version = "0.0.1"
-
 var ErrIsClosed = errors.New("server is closed")
 
 // TODO: bsena; define better these interfaces
@@ -113,7 +109,7 @@ func newHephLSP(root *hroot.State, debug bool) (*hephLSP, error) {
 		// TextDocumentReferences:  lang.TextDocumentReferencesFuncWrapper(manager),
 		// TextDocumentDeclaration: lang.TextDocumentDeclarationFuncWrapper(manager),
 	}
-	server := server.NewServer(handler, HephLanguage, debug)
+	server := server.NewServer(handler, runtime.HephLanguage, debug)
 
 	lsp.h = handler
 	lsp.s = server
@@ -150,8 +146,8 @@ func (h *hephLSP) wrapInitialize() protocol.InitializeFunc {
 		return protocol.InitializeResult{
 			Capabilities: capabilities,
 			ServerInfo: &protocol.InitializeResultServerInfo{
-				Name:    HephLanguage,
-				Version: &Version,
+				Name:    runtime.HephLanguage,
+				Version: &runtime.Version,
 			},
 		}, nil
 	}

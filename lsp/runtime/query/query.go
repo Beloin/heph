@@ -4,6 +4,7 @@ import (
 	"errors"
 	"maps"
 	"slices"
+	"strings"
 
 	"github.com/hephbuild/heph/lsp/runtime/symbol"
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
@@ -14,7 +15,7 @@ import (
 
 // TODO: Why don't use starlark parser?
 // e.g. syntax.Parse(filename string, src interface{}, mode syntax.Mode)
-// - We would need a parser that parses blocks of code?
+// - We would need a parser that parses blocks of code
 // - We would need in-memory parse
 // - We won't have custom queries
 // - Parsers generate AST not an CST
@@ -68,21 +69,21 @@ var ErrEmptyTreeError = errors.New("empty tree")
 // TODO: bsena; See how to use the global server
 var lang = tree_sitter.NewLanguage(tree_sitter_python.Language())
 
-func QuerySymbols(tree *tree_sitter.Tree, text []byte) ([]*symbol.Symbol, error) {
+func QuerySymbols(tree *tree_sitter.Tree, text []byte, source string) ([]*symbol.Symbol, error) {
 	symbols := []*symbol.Symbol{}
-	classSymbols, err := ExtractClass(tree, text)
+	classSymbols, err := ExtractClass(tree, text, source)
 	if err != nil {
 		return nil, err
 	}
 	symbols = append(symbols, classSymbols...)
 
-	funcSymbols, err := ExtractFunctions(tree, text)
+	funcSymbols, err := ExtractFunctions(tree, text, source)
 	if err != nil {
 		return nil, err
 	}
 	symbols = append(symbols, funcSymbols...)
 
-	varSymbols, err := ExtractVariables(tree, text)
+	varSymbols, err := ExtractVariables(tree, text, source)
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +92,7 @@ func QuerySymbols(tree *tree_sitter.Tree, text []byte) ([]*symbol.Symbol, error)
 	return symbols, nil
 }
 
-func ExtractClass(tree *tree_sitter.Tree, text []byte) ([]*symbol.Symbol, error) {
+func ExtractClass(tree *tree_sitter.Tree, text []byte, source string) ([]*symbol.Symbol, error) {
 	if tree.RootNode() == nil {
 		return nil, ErrEmptyTreeError
 	}
@@ -109,7 +110,7 @@ func ExtractClass(tree *tree_sitter.Tree, text []byte) ([]*symbol.Symbol, error)
 	classes := []*symbol.Symbol{}
 	matches := cursor.Matches(query, tree.RootNode(), text)
 	for match := matches.Next(); match != nil; match = matches.Next() {
-		currClass := &symbol.Symbol{Kind: symbol.ClassKind}
+		currClass := &symbol.Symbol{Kind: symbol.ClassKind, Source: source}
 		methodMap := map[string]*symbol.Symbol{}
 		var currentMethod *string
 		for _, capture := range match.Captures {
@@ -122,17 +123,18 @@ func ExtractClass(tree *tree_sitter.Tree, text []byte) ([]*symbol.Symbol, error)
 				currClass.Position.RowStart = nodeRange.StartPoint.Row
 				currClass.Position.ColumnStart = nodeRange.StartPoint.Column
 				currClass.Name = patternValue
-				currClass.FullName = patternValue
+				currClass.FullyQualifiedName = patternValue
 				currClass.Signature = currClass.Name
 			case "class.docstring":
-				currClass.DocString = patternValue
+				currClass.DocString = sanitizeComment(patternValue)
 			case "method.name":
 				p := patternValue
 				currentMethod = &p
 
 				methodMap[*currentMethod] = &symbol.Symbol{
-					Name:     patternValue,
-					FullName: currClass.Name + "." + patternValue,
+					Name:               patternValue,
+					Source:             source,
+					FullyQualifiedName: currClass.Name + "." + patternValue,
 					Position: symbol.Position{
 						RowStart:    nodeRange.StartPoint.Row,
 						ColumnStart: nodeRange.StartPoint.Column,
@@ -146,7 +148,7 @@ func ExtractClass(tree *tree_sitter.Tree, text []byte) ([]*symbol.Symbol, error)
 			case "method.docstring":
 				if currentMethod != nil {
 					s := methodMap[*currentMethod]
-					s.DocString = patternValue
+					s.DocString = sanitizeComment(patternValue)
 				}
 			}
 		}
@@ -158,7 +160,7 @@ func ExtractClass(tree *tree_sitter.Tree, text []byte) ([]*symbol.Symbol, error)
 	return classes, nil
 }
 
-func ExtractFunctions(tree *tree_sitter.Tree, text []byte) ([]*symbol.Symbol, error) {
+func ExtractFunctions(tree *tree_sitter.Tree, text []byte, source string) ([]*symbol.Symbol, error) {
 	if tree.RootNode() == nil {
 		return nil, ErrEmptyTreeError
 	}
@@ -176,7 +178,7 @@ func ExtractFunctions(tree *tree_sitter.Tree, text []byte) ([]*symbol.Symbol, er
 	functions := []*symbol.Symbol{}
 	matches := cursor.Matches(query, tree.RootNode(), text)
 	for match := matches.Next(); match != nil; match = matches.Next() {
-		currSymbol := &symbol.Symbol{Kind: symbol.FunctionKind}
+		currSymbol := &symbol.Symbol{Kind: symbol.FunctionKind, Source: source}
 		for _, capture := range match.Captures {
 			patternName := query.CaptureNames()[capture.Index]
 			nodeRange := capture.Node.Range()
@@ -187,11 +189,11 @@ func ExtractFunctions(tree *tree_sitter.Tree, text []byte) ([]*symbol.Symbol, er
 				currSymbol.Position.RowStart = nodeRange.StartPoint.Row
 				currSymbol.Position.ColumnStart = nodeRange.StartPoint.Column
 				currSymbol.Name = patternValue
-				currSymbol.FullName = patternValue
+				currSymbol.FullyQualifiedName = patternValue
 			case "function.params":
 				currSymbol.Signature = currSymbol.Name + patternValue
 			case "function.docstring":
-				currSymbol.DocString = patternValue
+				currSymbol.DocString = sanitizeComment(patternValue)
 			}
 
 		}
@@ -202,7 +204,7 @@ func ExtractFunctions(tree *tree_sitter.Tree, text []byte) ([]*symbol.Symbol, er
 	return functions, nil
 }
 
-func ExtractVariables(tree *tree_sitter.Tree, text []byte) ([]*symbol.Symbol, error) {
+func ExtractVariables(tree *tree_sitter.Tree, text []byte, source string) ([]*symbol.Symbol, error) {
 	root := tree.RootNode()
 	if root == nil {
 		return nil, ErrEmptyTreeError
@@ -222,17 +224,17 @@ func ExtractVariables(tree *tree_sitter.Tree, text []byte) ([]*symbol.Symbol, er
 	matches := cursor.Matches(query, root, text)
 	for match := matches.Next(); match != nil; match = matches.Next() {
 
-		currSymbol := &symbol.Symbol{Kind: symbol.VariableKind}
+		currSymbol := &symbol.Symbol{Kind: symbol.VariableKind, Source: source}
 		for _, capture := range match.Captures {
 			patternName := query.CaptureNames()[capture.Index]
 			patternValue := capture.Node.Utf8Text(text)
 
 			switch patternName {
 			case "var.comment":
-				currSymbol.DocString = patternValue
+				currSymbol.DocString = sanitizeComment(patternValue)
 			case "var.name":
 				currSymbol.Name = patternValue
-				currSymbol.FullName = patternValue
+				currSymbol.FullyQualifiedName = patternValue
 			case "var.value":
 				currSymbol.Value = patternValue
 			}
@@ -243,4 +245,18 @@ func ExtractVariables(tree *tree_sitter.Tree, text []byte) ([]*symbol.Symbol, er
 	}
 
 	return vars, nil
+}
+
+func sanitizeComment(cmmt string) string {
+	if cmmt, ok := strings.CutPrefix(cmmt, "#"); ok {
+		return strings.TrimSpace(cmmt)
+	}
+
+	if cmmt, ok := strings.CutPrefix(cmmt, "\"\"\""); ok {
+		cmmt, _ = strings.CutSuffix(cmmt, "\"\"\"")
+
+		return strings.TrimSpace(cmmt)
+	}
+
+	return cmmt
 }

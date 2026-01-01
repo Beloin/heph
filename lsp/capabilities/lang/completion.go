@@ -15,6 +15,15 @@ func TextDocumentCompletionFuncWrapper(manager *runtime.Manager) protocol.TextDo
 
 		// TODO: bsena; Read based in position so we can get classes' methods
 
+		// Need to implement:
+		// 1. Inside function lookup its arguments
+		// 2. Signature help
+
+		// TODO: continue from here
+		// if doc, found := manager.GetDocument(params.TextDocument.URI); found {
+		// 	byteOffset := params.Position.IndexIn(doc.TextString)
+		// }
+
 		for _, symbol := range manager.AllLoadedSymbols() {
 			name := symbol.Name
 			sig := symbol.Signature

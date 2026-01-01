@@ -42,7 +42,7 @@ func (suite *QuerySuite) TestClassQuery() {
 	parser := suite.newParser()
 	classTree := parser.Parse(classTest, nil)
 
-	symbols, err := query.ExtractClass(classTree, classTest)
+	symbols, err := query.ExtractClass(classTree, classTest, "")
 	suite.Require().NoError(err)
 	suite.Require().NotNil(symbols)
 	suite.Require().NotEmpty(symbols)
@@ -70,7 +70,7 @@ func (suite *QuerySuite) TestFunctionQuery() {
 	parser := suite.newParser()
 	pythonTree := parser.Parse(pythonTest, nil)
 
-	symbols, err := query.ExtractFunctions(pythonTree, pythonTest)
+	symbols, err := query.ExtractFunctions(pythonTree, pythonTest, "")
 	suite.Require().NoError(err)
 
 	names := []string{}
@@ -87,7 +87,7 @@ func (suite *QuerySuite) TestVariablesQuery() {
 	parser := suite.newParser()
 	pythonTree := parser.Parse(pythonTest, nil)
 
-	symbols, err := query.ExtractVariables(pythonTree, pythonTest)
+	symbols, err := query.ExtractVariables(pythonTree, pythonTest, "")
 	suite.Require().NoError(err)
 
 	names := []string{}
