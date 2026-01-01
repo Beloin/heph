@@ -71,6 +71,15 @@ func (d *Document) extractSymbols() error {
 	return nil
 }
 
+func (d *Document) ExtractCurrentStringLiteral(byteOffSet uint) string {
+	return query.ExtractCurrentStringLiteral(d.Tree.RootNode(), d.Text, byteOffSet)
+}
+
+func (d *Document) ExtractCurrentSymbol(byteOffSet uint) (*symbol.Symbol, bool) {
+	sName := d.ExtractCurrentSymbolName(byteOffSet)
+	return d.Query(sName)
+}
+
 func (d *Document) ExtractCurrentSymbolName(byteOffSet uint) string {
 	return query.ExtractCurrentSymbol(d.Tree.RootNode(), d.Text, byteOffSet)
 }

@@ -19,6 +19,7 @@ import (
 // - We would need in-memory parse
 // - We won't have custom queries
 // - Parsers generate AST not an CST
+// - In CST I can look direct into nodes an query specified node in position offset
 
 const functionQuery = `
 (function_definition
