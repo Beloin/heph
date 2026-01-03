@@ -24,7 +24,16 @@ import (
 const functionQuery = `
 (function_definition
   name: (identifier) @function.name
-  parameters: (parameters) @function.params
+	parameters: (parameters
+			[
+				(identifier)
+				(default_parameter (identifier))
+				(typed_parameter (identifier))
+				(typed_default_parameter (identifier))
+				(list_splat_pattern (identifier))
+				(dictionary_splat_pattern (identifier))
+			] @function.param
+	) @function.params
   body: (block .
      (expression_statement
       (string (string_content) )) @function.docstring)?)
@@ -176,8 +185,10 @@ func ExtractFunctions(tree *tree_sitter.Tree, text []byte, source string) ([]*sy
 	cursor := tree_sitter.NewQueryCursor()
 	defer cursor.Close()
 
-	functions := []*symbol.Symbol{}
 	matches := cursor.Matches(query, tree.RootNode(), text)
+
+	funs := map[string]*symbol.Symbol{}
+
 	for match := matches.Next(); match != nil; match = matches.Next() {
 		currSymbol := &symbol.Symbol{Kind: symbol.FunctionKind, Source: source}
 		for _, capture := range match.Captures {
@@ -187,22 +198,32 @@ func ExtractFunctions(tree *tree_sitter.Tree, text []byte, source string) ([]*sy
 
 			switch patternName {
 			case "function.name":
+				// Params query repeats Captures. We use Function Name as id
+				if ss, ok := funs[patternValue]; ok {
+					ss.Parameters = append(ss.Parameters, currSymbol.Parameters...)
+					currSymbol = ss
+				}
+
 				currSymbol.Position.RowStart = nodeRange.StartPoint.Row
 				currSymbol.Position.ColumnStart = nodeRange.StartPoint.Column
 				currSymbol.Name = patternValue
 				currSymbol.FullyQualifiedName = patternValue
+
+				funs[patternValue] = currSymbol
 			case "function.params":
 				currSymbol.Signature = currSymbol.Name + patternValue
+			case "function.param":
+				newParam := &symbol.Parameter{Name: patternValue}
+				currSymbol.Parameters = append(currSymbol.Parameters, newParam)
 			case "function.docstring":
 				currSymbol.DocString = sanitizeComment(patternValue)
 			}
 
 		}
 
-		functions = append(functions, currSymbol)
 	}
 
-	return functions, nil
+	return slices.Collect(maps.Values(funs)), nil
 }
 
 func ExtractVariables(tree *tree_sitter.Tree, text []byte, source string) ([]*symbol.Symbol, error) {
@@ -250,14 +271,27 @@ func ExtractVariables(tree *tree_sitter.Tree, text []byte, source string) ([]*sy
 
 func sanitizeComment(cmmt string) string {
 	if cmmt, ok := strings.CutPrefix(cmmt, "#"); ok {
-		return strings.TrimSpace(cmmt)
+		return processCommentLines(cmmt)
 	}
 
 	if cmmt, ok := strings.CutPrefix(cmmt, "\"\"\""); ok {
 		cmmt, _ = strings.CutSuffix(cmmt, "\"\"\"")
-
-		return strings.TrimSpace(cmmt)
+		return processCommentLines(cmmt)
 	}
 
-	return cmmt
+	return processCommentLines(cmmt)
+}
+
+func processCommentLines(comment string) string {
+	lines := strings.Split(comment, "\n")
+	var processedLines []string
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed != "" {
+			processedLines = append(processedLines, trimmed)
+		}
+	}
+
+	return strings.Join(processedLines, "\n")
 }

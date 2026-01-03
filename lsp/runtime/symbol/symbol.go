@@ -24,14 +24,15 @@ type rawPosition struct {
 	ByteEnd   uint
 }
 
+type Parameter struct {
+	Name     string
+	Type     string
+	DocStrin string
+}
+
 type Symbol struct {
 	Name   string
 	Source string
-
-	// TODO: bsena; Add this to validate full name of methods?
-	// Or add reference to parent?
-	// If its reference we need a subtree from a node of the tree.
-	// Like a subtree for a custom node but search would be more painfully.
 
 	// FullyQualifiedName references the compoosite name from class, function, method etc. names.
 	// For example, `a.b.c.d` would be a full reference name for the symbol `d`.
@@ -40,6 +41,10 @@ type Symbol struct {
 
 	Kind      SymbolKind
 	Signature string
+
+	// TODO: bsena; Creat a struct to have name and docstring extracted from "args" function docstring
+	// also add type as string if it exists
+	Parameters []*Parameter
 
 	// Value is the current literal value for a variable
 	Value     string
@@ -57,18 +62,25 @@ func (s *Symbol) Is(kind SymbolKind) bool {
 }
 
 // Args return symbol args if Symbol.Kind == FunctionKind
+// TODO: bsena; Extract params from whitin query itself
 func (s *Symbol) Args() []string {
 	if !s.Is(FunctionKind) {
 		return nil
 	}
 
-	return extractFunctionArgs(s.Signature)
+	return s.extractFunctionArgs()
 }
 
 // extractFunctionArgs extracts arguments from a function signature.
 // Returns the arguments as a slice of strings and a boolean indicating if arguments were found.
-func extractFunctionArgs(signature string) []string {
-	signature, ok := strings.CutPrefix(signature, "(")
+func (s *Symbol) extractFunctionArgs() []string {
+	signature, ok := strings.CutPrefix(s.Signature, s.Name)
+	if !ok {
+		return nil
+	}
+
+	// TODO: instead of cut, just do a slice
+	signature, ok = strings.CutPrefix(signature, "(")
 	if !ok {
 		return nil
 	}

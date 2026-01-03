@@ -96,6 +96,31 @@ func (s *SymbolTestSuite) TestFindVariable() {
 	s.Equal(expectedSymbol, actualSymbol)
 }
 
+func (s *SymbolTestSuite) TestFindFunctionNameFromParameter() {
+	currText := "def my_fun(arg1, arg2):\n\tpass"
+
+	parser := tree_sitter.NewParser()
+	err := parser.SetLanguage(tree_sitter.NewLanguage(tree_sitter_python.Language()))
+	s.Require().NoError(err)
+
+	tree := parser.Parse([]byte(currText), nil)
+	defer tree.Close()
+	root := tree.RootNode()
+
+	// arg1 offset a'r'g1
+	byteOffset := uint(13)
+	actualSymbol := query.ExtractFunctionNameFromOffset(root, []byte(currText), byteOffset)
+
+	expectedSymbol := "my_fun"
+	s.Equal(expectedSymbol, actualSymbol)
+
+
+	// arg1 offset a'r'g2
+	byteOffset = uint(19)
+	actualSymbol = query.ExtractFunctionNameFromOffset(root, []byte(currText), byteOffset)
+	s.Equal(expectedSymbol, actualSymbol)
+}
+
 func (s *SymbolTestSuite) TestExtractCurrentSymbol_FunctionName() {
 	offset := findByteOffset(s.source, "hello_world")
 	s.NotEqual(-1, offset, "Should find 'hello_world' in source")

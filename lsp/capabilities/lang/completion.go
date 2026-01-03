@@ -10,6 +10,8 @@ import (
 
 var Logger = commonlog.GetLogger("completion")
 
+// TODO: bsena; Implement protocol.CompletionItemResolveFunc
+
 func TextDocumentCompletionFuncWrapper(manager *runtime.Manager) protocol.TextDocumentCompletionFunc {
 	return func(context *glsp.Context, params *protocol.CompletionParams) (any, error) {
 		// TODO: bsena; put the first from this uri
@@ -33,12 +35,24 @@ func TextDocumentCompletionFuncWrapper(manager *runtime.Manager) protocol.TextDo
 		allPerKind := manager.AllLoadedSymbolsPerKind()
 
 		if doc, found := manager.GetDocument(params.TextDocument.URI); found {
+			Logger.Noticef("Found Doc: %s", doc.Name)
+
 			byteOffset := params.Position.IndexIn(doc.TextString)
 			symbolName := doc.ExtractCurrentSymbolName(uint(byteOffset))
-			if s, found := manager.Query(symbolName); found {
+			Logger.Noticef("Offset: %d & SymbolName: %s", byteOffset, symbolName)
+			
+			// TODO: Still not working, Symbol and Funname are empty
+			funName := doc.ExtractCurrentFunctionName(uint(byteOffset))
+			Logger.Noticef("Offset: %d & FunName: %s", byteOffset, funName)
+
+			// TODO: looks like it is trapped inside function () -> How to go outside? Request parent node?
+			// But we will actually need to have parameters splicit in symbol, since we can have a lot of parans werdly sparsed
+			if s, found := manager.Query(funName); found {
+				Logger.Noticef("Symbol Found: %s", s.Signature)
+
 				// If is function we can get args or other vars/functions as arguments
 				if s.Is(symbol.FunctionKind) {
-					args := s.Args()
+					args := s.Parameters
 					var completionItems []protocol.CompletionItem
 					if args != nil {
 						completionItems = createCompletionItemForArgs(args, s)
@@ -85,13 +99,13 @@ func createCompletionItem(symbol *symbol.Symbol) protocol.CompletionItem {
 }
 
 // TODO: this is ugly
-func createCompletionItemForArgs(args []string, s *symbol.Symbol) []protocol.CompletionItem {
+func createCompletionItemForArgs(args []*symbol.Parameter, s *symbol.Symbol) []protocol.CompletionItem {
 	completionItems := []protocol.CompletionItem{}
 	for _, arg := range args {
 		kind := protocol.CompletionItemKindField
 		completionItems = append(completionItems, protocol.CompletionItem{
-			Label:         arg,
-			InsertText:    &arg,
+			Label:         arg.Name,
+			InsertText:    &arg.Name,
 			Kind:          &kind,
 			Documentation: s.DocString,
 		})

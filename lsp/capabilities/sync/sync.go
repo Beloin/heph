@@ -5,7 +5,6 @@ import (
 
 	"github.com/hephbuild/heph/lsp/runtime"
 	"github.com/hephbuild/heph/lsp/runtime/document"
-	"github.com/tliron/commonlog"
 	"github.com/tliron/glsp"
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 
@@ -20,8 +19,6 @@ var (
 	ErrInvalidDoc  = errors.New("invalid doc")
 )
 
-var SyncLogger = commonlog.GetLogger("sync")
-
 // protocol.TextDocumentDidOpenFunc            | Mandatory
 // protocol.TextDocumentDidChangeFunc          | Mandatory
 // protocol.TextDocumentWillSaveFunc
@@ -35,8 +32,6 @@ func TextDocumentDidOpenWrapper(manager *runtime.Manager) protocol.TextDocumentD
 	// TODO: bsena; We are panicking when we read invalid file, why?
 
 	return func(context *glsp.Context, params *protocol.DidOpenTextDocumentParams) error {
-		SyncLogger.Noticef("Get File: %s", params.TextDocument.URI)
-
 		parser := manager.Parser
 		text := params.TextDocument.Text
 		bts := []byte(text)
@@ -71,8 +66,6 @@ func TextDocumentDidOpenWrapper(manager *runtime.Manager) protocol.TextDocumentD
 
 func TextDocumentDidChangeFuncWrapper(manager *runtime.Manager) protocol.TextDocumentDidChangeFunc {
 	return func(context *glsp.Context, params *protocol.DidChangeTextDocumentParams) error {
-		SyncLogger.Noticef("received TextDocumentDidChange")
-
 		parser := manager.Parser
 
 		doc, ok := manager.GetDocument(params.TextDocument.URI)
@@ -87,9 +80,6 @@ func TextDocumentDidChangeFuncWrapper(manager *runtime.Manager) protocol.TextDoc
 
 				startByteOffset, endByteOffset := event.Range.IndexesIn(text)
 				endByte := uint(endByteOffset) + uint(len(insertBytes))
-
-				SyncLogger.Noticef("TextDocumentContentChangeEvent: index=%d, end=%d lenbytes=%d, len=%d, txt=\n%q<EOF>",
-					startByteOffset, endByteOffset, len(insertBytes), len(event.Text), event.Text)
 
 				editInput := tree_sitter.InputEdit{
 					StartByte:  uint(startByteOffset),
@@ -112,7 +102,6 @@ func TextDocumentDidChangeFuncWrapper(manager *runtime.Manager) protocol.TextDoc
 
 				doc.Tree.Edit(&editInput)
 				newText := ParseNewBytes(doc.Text, insertBytes, startByteOffset, endByteOffset)
-				SyncLogger.Noticef("TextDocumentContentChangeEvent: newtxt=\n%q", string(newText))
 				newTree := parser.Parse(newText, doc.Tree)
 
 				_, err := doc.SwapTree(newTree, newText)
@@ -123,8 +112,6 @@ func TextDocumentDidChangeFuncWrapper(manager *runtime.Manager) protocol.TextDoc
 			}
 
 			if event, ok := change.(protocol.TextDocumentContentChangeEventWhole); ok {
-				SyncLogger.Info("TextDocumentContentChangeEventWhole: txt=\n%s", event.Text)
-
 				bts := []byte(event.Text)
 				newTree := parser.Parse(bts, nil)
 
@@ -140,8 +127,8 @@ func TextDocumentDidChangeFuncWrapper(manager *runtime.Manager) protocol.TextDoc
 	}
 }
 
-// TODO: bsena; later we cannot work copying arrays, what if file is just too big? Change array inplace?
-// Put this inside runtime?
+// ParseNewBytes creates a new byte array to insert changes from client
+// Later we can check if we can do it inplace
 func ParseNewBytes(current, insert []byte, offsetStart, offsetEnd int) []byte {
 	diff := offsetEnd - offsetStart
 	newLen := len(current) + len(insert) - diff

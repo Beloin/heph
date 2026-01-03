@@ -84,6 +84,7 @@ func (m *Manager) AllLoadedSymbols(filters ...Filter) []*symbol.Symbol {
 	return allSymbols
 }
 
+// kindStruct is a struct helper to get symbol per kind
 type kindStruct struct {
 	AllSymbols []*symbol.Symbol
 	Variables  []*symbol.Symbol
@@ -132,6 +133,7 @@ func (m *Manager) AllLoadedSymbolsPerKind() kindStruct {
 // in that tree using Symbol.Fullname as index
 // Also how to work with imports?
 // Probalby this tree will be in Manager's struct
+// add to /heph/utils/trie
 func (m *Manager) Query(symbolName string) (*symbol.Symbol, bool) {
 	if s, found := symbol.FindSymbol(m.BuiltinSymbols, symbolName); found {
 		return s, true

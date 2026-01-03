@@ -104,8 +104,12 @@ func newHephLSP(root *hroot.State, debug bool) (*hephLSP, error) {
 		TextDocumentDidChange: docsync.TextDocumentDidChangeFuncWrapper(manager),
 
 		// Lang features
-		TextDocumentCompletion: lang.TextDocumentCompletionFuncWrapper(manager),
-		TextDocumentHover:      lang.TextDocumentHoverFuncWrapper(manager),
+		// CompletionItemResolve:    lang.TextDocumentCompletionFuncWrapper(manager),
+		TextDocumentCompletion:    lang.TextDocumentCompletionFuncWrapper(manager),
+		TextDocumentHover:         lang.TextDocumentHoverFuncWrapper(manager),
+		TextDocumentSignatureHelp: lang.TextDocumentSignatureHelpFuncWrapper(manager),
+
+		// TextDocumentCodeLens:                TextDocumentCodeLensFunc // TODO: bsena; Implement code lens to copy addr?
 		// TextDocumentReferences:  lang.TextDocumentReferencesFuncWrapper(manager),
 		// TextDocumentDeclaration: lang.TextDocumentDeclarationFuncWrapper(manager),
 	}

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/hephbuild/heph/lsp/runtime/query"
+	"github.com/hephbuild/heph/lsp/runtime/symbol"
 	"github.com/stretchr/testify/suite"
 
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
@@ -81,6 +82,50 @@ func (suite *QuerySuite) TestFunctionQuery() {
 	suite.Require().NotNil(symbols)
 	suite.Require().NotEmpty(symbols)
 	suite.Require().ElementsMatch(functionNames, names)
+}
+
+func (suite *QuerySuite) TestFunctionParametersQuery() {
+	parser := suite.newParser()
+	pythonTree := parser.Parse(pythonTest, nil)
+
+	symbols, err := query.ExtractFunctions(pythonTree, pythonTest, "")
+	suite.Require().NoError(err)
+
+	suite.Require().NotNil(symbols)
+	suite.Require().NotEmpty(symbols)
+
+	// Find the two functions
+	var customFunc, otherFunc *symbol.Symbol
+	for _, s := range symbols {
+		switch s.Name {
+		case "my_custom_function":
+			customFunc = s
+		case "my_other_function":
+			otherFunc = s
+		}
+	}
+
+	suite.Require().NotNil(customFunc, "my_custom_function should be found")
+	suite.Require().NotNil(otherFunc, "my_other_function should be found")
+
+	// Test my_custom_function parameters
+	suite.Require().Len(customFunc.Parameters, 2, "my_custom_function should have 2 parameters")
+	customFuncParamNames := []string{}
+	for _, param := range customFunc.Parameters {
+		customFuncParamNames = append(customFuncParamNames, param.Name)
+	}
+	suite.Require().Contains(customFuncParamNames, "arg1", "my_custom_function should have arg1 parameter")
+	suite.Require().Contains(customFuncParamNames, "arg2", "my_custom_function should have arg2 parameter")
+
+	// Test my_other_function parameters
+	suite.Require().Len(otherFunc.Parameters, 3, "my_other_function should have 3 parameters")
+	otherFuncParamNames := []string{}
+	for _, param := range otherFunc.Parameters {
+		otherFuncParamNames = append(otherFuncParamNames, param.Name)
+	}
+	suite.Require().Contains(otherFuncParamNames, "arg1", "my_other_function should have arg1 parameter")
+	suite.Require().Contains(otherFuncParamNames, "arg2", "my_other_function should have arg2 parameter")
+	suite.Require().Contains(otherFuncParamNames, "arg3", "my_other_function should have arg3 parameter")
 }
 
 func (suite *QuerySuite) TestVariablesQuery() {

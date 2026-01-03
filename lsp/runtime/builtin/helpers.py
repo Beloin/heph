@@ -60,3 +60,9 @@ def group(
     """
     pass
 
+
+def load(name: str):
+    """
+    Loads Heph script from path
+    """
+    pass

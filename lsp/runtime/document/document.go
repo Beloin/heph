@@ -84,6 +84,10 @@ func (d *Document) ExtractCurrentSymbolName(byteOffSet uint) string {
 	return query.ExtractCurrentSymbol(d.Tree.RootNode(), d.Text, byteOffSet)
 }
 
+func (d *Document) ExtractCurrentFunctionName(byteOffSet uint) string {
+	return query.ExtractFunctionNameFromOffset(d.Tree.RootNode(), d.Text, byteOffSet)
+}
+
 func (d *Document) Query(symbolName string) (*symbol.Symbol, bool) {
 	return symbol.FindSymbol(d.Symbols, symbolName)
 }
