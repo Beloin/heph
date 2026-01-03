@@ -26,13 +26,13 @@ const functionQuery = `
   name: (identifier) @function.name
 	parameters: (parameters
 			[
-				(identifier)
-				(default_parameter (identifier))
-				(typed_parameter (identifier))
-				(typed_default_parameter (identifier))
-				(list_splat_pattern (identifier))
-				(dictionary_splat_pattern (identifier))
-			] @function.param
+				(identifier) @function.param
+				(default_parameter (identifier) @function.param)
+				(typed_parameter (identifier) @function.param)
+				(typed_default_parameter (identifier) @function.param)
+				(list_splat_pattern (identifier) @function.param)
+				(dictionary_splat_pattern (identifier) @function.param)
+			]
 	) @function.params
   body: (block .
      (expression_statement
