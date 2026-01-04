@@ -9,6 +9,7 @@ import (
 
 var SignatureLogger = commonlog.GetLogger("signature")
 
+// TODO: bsena; Undestand where is this being called from
 func TextDocumentSignatureHelpFuncWrapper(manager *runtime.Manager) protocol.TextDocumentSignatureHelpFunc {
 	return func(context *glsp.Context, params *protocol.SignatureHelpParams) (*protocol.SignatureHelp, error) {
 		SignatureLogger.Noticef("Calling signature")

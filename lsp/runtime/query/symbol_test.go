@@ -114,9 +114,82 @@ func (s *SymbolTestSuite) TestFindFunctionNameFromParameter() {
 	expectedSymbol := "my_fun"
 	s.Equal(expectedSymbol, actualSymbol)
 
-
 	// arg1 offset a'r'g2
 	byteOffset = uint(19)
+	actualSymbol = query.ExtractFunctionNameFromOffset(root, []byte(currText), byteOffset)
+	s.Equal(expectedSymbol, actualSymbol)
+}
+
+func (s *SymbolTestSuite) TestFindArgumentNameFromCall() {
+	currText := "my_fun(arg1=12, arg2=13)"
+
+	parser := tree_sitter.NewParser()
+	err := parser.SetLanguage(tree_sitter.NewLanguage(tree_sitter_python.Language()))
+	s.Require().NoError(err)
+
+	tree := parser.Parse([]byte(currText), nil)
+	defer tree.Close()
+	root := tree.RootNode()
+
+	// 'r'
+	byteOffset := uint(8)
+	actualSymbol := query.ExtractCurrentSymbol(root, []byte(currText), byteOffset)
+
+	expectedSymbol := "arg1"
+	s.Equal(expectedSymbol, actualSymbol)
+
+	// 'a'
+	byteOffset = uint(16)
+	actualSymbol = query.ExtractCurrentSymbol(root, []byte(currText), byteOffset)
+
+	expectedSymbol = "arg2"
+	s.Equal(expectedSymbol, actualSymbol)
+}
+
+func (s *SymbolTestSuite) TestFindFunctionNameNoParameter() {
+	currText := "def my_fun():\n\tpass"
+
+	parser := tree_sitter.NewParser()
+	err := parser.SetLanguage(tree_sitter.NewLanguage(tree_sitter_python.Language()))
+	s.Require().NoError(err)
+
+	tree := parser.Parse([]byte(currText), nil)
+	defer tree.Close()
+	root := tree.RootNode()
+
+	// '('
+	byteOffset := uint(11)
+	actualSymbol := query.ExtractFunctionNameFromOffset(root, []byte(currText), byteOffset)
+
+	expectedSymbol := "my_fun"
+	s.Equal(expectedSymbol, actualSymbol)
+
+	// ')'
+	byteOffset = uint(12)
+	actualSymbol = query.ExtractFunctionNameFromOffset(root, []byte(currText), byteOffset)
+	s.Equal(expectedSymbol, actualSymbol)
+}
+
+func (s *SymbolTestSuite) TestFindFunctionNameFromCall() {
+	currText := "my_fun()"
+
+	parser := tree_sitter.NewParser()
+	err := parser.SetLanguage(tree_sitter.NewLanguage(tree_sitter_python.Language()))
+	s.Require().NoError(err)
+
+	tree := parser.Parse([]byte(currText), nil)
+	defer tree.Close()
+	root := tree.RootNode()
+
+	// '('
+	byteOffset := uint(6)
+	actualSymbol := query.ExtractFunctionNameFromOffset(root, []byte(currText), byteOffset)
+
+	expectedSymbol := "my_fun"
+	s.Equal(expectedSymbol, actualSymbol)
+
+	// ')'
+	byteOffset = uint(7)
 	actualSymbol = query.ExtractFunctionNameFromOffset(root, []byte(currText), byteOffset)
 	s.Equal(expectedSymbol, actualSymbol)
 }

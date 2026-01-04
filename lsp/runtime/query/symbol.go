@@ -27,7 +27,19 @@ func ExtractCurrentStringLiteral(root *tree_sitter.Node, source []byte, byteOffS
 }
 
 func ExtractFunctionNameFromOffset(root *tree_sitter.Node, source []byte, byteOffSet uint) string {
-	for root != nil && root.Kind() != "function_definition" {
+	childLookup := ""
+	for root != nil {
+		switch root.Kind() {
+		case "function_definition":
+			childLookup = "name"
+		case "call":
+			childLookup = "function"
+		}
+
+		if childLookup != "" {
+			break
+		}
+
 		root = root.FirstChildForByte(byteOffSet)
 	}
 
@@ -35,7 +47,7 @@ func ExtractFunctionNameFromOffset(root *tree_sitter.Node, source []byte, byteOf
 		return ""
 	}
 
-	root = root.ChildByFieldName("name")
+	root = root.ChildByFieldName(childLookup)
 
 	if root == nil {
 		return ""
@@ -43,4 +55,3 @@ func ExtractFunctionNameFromOffset(root *tree_sitter.Node, source []byte, byteOf
 
 	return root.Utf8Text(source)
 }
-

@@ -20,40 +20,16 @@ func TextDocumentCompletionFuncWrapper(manager *runtime.Manager) protocol.TextDo
 		// TODO: bsena; ~Read based in position so we can get classes' methods~
 		// We actually are not going to do that, we will extract custom builtins based in hbuiltin
 
-		// Need to implement:
-		// 1. Inside function lookup its arguments
-		// 2. Signature help
-
-		// TODO: bsena: Also refactor this to just return completion in the end
-		// And put the values in order
-
-		// TODO: continue from here to look into function args and complete them
-		// Whys is this not working?
-		// If we have a function, we look first for its arguments
-
-		// TODO: bsena; Prevent this when is function
 		allPerKind := manager.AllLoadedSymbolsPerKind()
 
+		// If is function we can get args completion
 		if doc, found := manager.GetDocument(params.TextDocument.URI); found {
-			Logger.Noticef("Found Doc: %s", doc.Name)
-
 			byteOffset := params.Position.IndexIn(doc.TextString)
-			symbolName := doc.ExtractCurrentSymbolName(uint(byteOffset))
-			Logger.Noticef("Offset: %d & SymbolName: %s", byteOffset, symbolName)
-			
-			// TODO: Still not working, Symbol and Funname are empty
 			funName := doc.ExtractCurrentFunctionName(uint(byteOffset))
-			Logger.Noticef("Offset: %d & FunName: %s", byteOffset, funName)
 
-			// TODO: looks like it is trapped inside function () -> How to go outside? Request parent node?
-			// But we will actually need to have parameters splicit in symbol, since we can have a lot of parans werdly sparsed
 			if s, found := manager.Query(funName); found {
-				Logger.Noticef("Symbol Found: %s", s.Signature)
-
-				// If is function we can get args or other vars/functions as arguments
 				if s.Is(symbol.FunctionKind) {
 					args := s.Parameters
-					var completionItems []protocol.CompletionItem
 					if args != nil {
 						completionItems = createCompletionItemForArgs(args, s)
 					}
@@ -98,14 +74,15 @@ func createCompletionItem(symbol *symbol.Symbol) protocol.CompletionItem {
 	return compItem
 }
 
-// TODO: this is ugly
 func createCompletionItemForArgs(args []*symbol.Parameter, s *symbol.Symbol) []protocol.CompletionItem {
 	completionItems := []protocol.CompletionItem{}
 	for _, arg := range args {
-		kind := protocol.CompletionItemKindField
+		kind := protocol.CompletionItemKindVariable
+
+		label := arg.Name + "="
 		completionItems = append(completionItems, protocol.CompletionItem{
-			Label:         arg.Name,
-			InsertText:    &arg.Name,
+			Label:         label,
+			InsertText:    &label,
 			Kind:          &kind,
 			Documentation: s.DocString,
 		})

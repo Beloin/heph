@@ -28,7 +28,8 @@ func NewDocument(name string, tree *tree_sitter.Tree, rawText []byte) (*Document
 	doc := &Document{Name: name, Tree: tree, Text: rawText, TextString: string(rawText)}
 
 	// TODO: bsena; Extract target names here, look for something like target(name="...")
-	err := doc.extractSymbols()
+	syms, err := extractSymbols(doc.Tree, doc.Text, doc.Name)
+	doc.Symbols = syms
 
 	return doc, err
 }
@@ -39,36 +40,30 @@ func (d *Document) SwapTree(newT *tree_sitter.Tree, newText []byte) (*tree_sitte
 	defer d.m.Unlock()
 
 	oldTree := d.Tree
-	oldText := d.Text
-	oldTextString := d.TextString
 
-	d.Tree = newT
-	d.Text = newText
-	d.TextString = string(newText)
-	err := d.extractSymbols()
+	syms, err := extractSymbols(newT, newText, d.Name)
 	if err != nil {
-		d.Tree = oldTree
-		d.Text = oldText
-		d.TextString = oldTextString
-
 		return nil, err
 	}
 
+	d.Symbols = syms
+	d.Tree = newT
+	d.Text = newText
+	d.TextString = string(newText)
 	oldTree.Close()
 
 	return oldTree, err
 }
 
-func (d *Document) extractSymbols() error {
-	symbols, err := query.QuerySymbols(d.Tree, d.Text, d.Name)
+// TODO: bsena; also extract targets here?
+// So we can have a custom symbol that is a spec.Target?
+func extractSymbols(tree *tree_sitter.Tree, text []byte, source string) ([]*symbol.Symbol, error) {
+	symbols, err := query.QuerySymbols(tree, text, source)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	// TODO: bsena; also extract targets here?
-	d.Symbols = symbols
-
-	return nil
+	return symbols, nil
 }
 
 func (d *Document) ExtractCurrentStringLiteral(byteOffSet uint) string {

@@ -28,7 +28,7 @@ const functionQuery = `
 			[
 				(identifier) @function.param
 				(default_parameter (identifier) @function.param)
-				(typed_parameter (identifier) @function.param)
+				(typed_parameter (identifier) @function.param (type (identifier) @function.param.type ) )
 				(typed_default_parameter (identifier) @function.param)
 				(list_splat_pattern (identifier) @function.param)
 				(dictionary_splat_pattern (identifier) @function.param)
@@ -102,6 +102,8 @@ func QuerySymbols(tree *tree_sitter.Tree, text []byte, source string) ([]*symbol
 	return symbols, nil
 }
 
+// TODO: bsena; Heph and starlark has no classes. maybe remove then from here after finding a way to use
+// builtins from 'hbuiltin'
 func ExtractClass(tree *tree_sitter.Tree, text []byte, source string) ([]*symbol.Symbol, error) {
 	if tree.RootNode() == nil {
 		return nil, ErrEmptyTreeError
@@ -191,6 +193,7 @@ func ExtractFunctions(tree *tree_sitter.Tree, text []byte, source string) ([]*sy
 
 	for match := matches.Next(); match != nil; match = matches.Next() {
 		currSymbol := &symbol.Symbol{Kind: symbol.FunctionKind, Source: source}
+		var currParam *symbol.Parameter
 		for _, capture := range match.Captures {
 			patternName := query.CaptureNames()[capture.Index]
 			nodeRange := capture.Node.Range()
@@ -213,8 +216,12 @@ func ExtractFunctions(tree *tree_sitter.Tree, text []byte, source string) ([]*sy
 			case "function.params":
 				currSymbol.Signature = currSymbol.Name + patternValue
 			case "function.param":
-				newParam := &symbol.Parameter{Name: patternValue}
-				currSymbol.Parameters = append(currSymbol.Parameters, newParam)
+				currParam = &symbol.Parameter{Name: patternValue}
+				currSymbol.Parameters = append(currSymbol.Parameters, currParam)
+			case "function.param.type":
+				if currParam != nil {
+					currParam.Type = patternValue
+				}
 			case "function.docstring":
 				currSymbol.DocString = sanitizeComment(patternValue)
 			}

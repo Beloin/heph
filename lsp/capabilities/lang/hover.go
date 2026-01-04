@@ -19,8 +19,10 @@ func TextDocumentHoverFuncWrapper(manager *runtime.Manager) protocol.TextDocumen
 		}
 
 		bytePos := params.Position.IndexIn(doc.TextString)
-		// TODO: bsena; Make hover context-aware
-		// look for target function etc
+		// TODO: bsena; Make hover context-aware, look for:
+		// - Target
+		// - Function
+		// - Argument
 
 		// TODO: bsena; also query for target //build/target:run
 		// For now extract the targets from each document loaded into a target spec, so we can load it in runtime?
@@ -32,6 +34,15 @@ func TextDocumentHoverFuncWrapper(manager *runtime.Manager) protocol.TextDocumen
 		}
 
 		symbolName := doc.ExtractCurrentSymbolName(uint(bytePos))
+
+		funName := doc.ExtractCurrentFunctionName(uint(bytePos))
+		if s, found := manager.Query(funName); found {
+			for _, p := range s.Parameters {
+				if strings.Contains(p.Name, symbolName) {
+					return createArgHover(s, p), nil
+				}
+			}
+		}
 
 		// Query first for current document symbols
 		if symbol, found := doc.Query(symbolName); found {
@@ -50,7 +61,7 @@ func createHover(symbol *symbol.Symbol) *protocol.Hover {
 	return &protocol.Hover{
 		Contents: protocol.MarkupContent{
 			Kind:  protocol.MarkupKindMarkdown,
-			Value: symbol.Source + "\n---\n" + langDecorate(symbol.Signature, runtime.HephLanguage) + "\n---\n" + symbol.DocString,
+			Value: symbol.Source + "\n---\n" + langDecorateMultiline(symbol.Signature, runtime.HephLanguage) + "\n---\n" + symbol.DocString,
 		},
 		Range: &protocol.Range{
 			Start: protocol.Position{
@@ -65,6 +76,21 @@ func createHover(symbol *symbol.Symbol) *protocol.Hover {
 	}
 }
 
+func createArgHover(fn *symbol.Symbol, param *symbol.Parameter) *protocol.Hover {
+	// TODO: bsena; use options or visitor pattern
+	paramText := param.Name
+	if param.Type != "" {
+		paramText = param.Name + ":" + param.Type
+	}
+
+	return &protocol.Hover{
+		Contents: protocol.MarkupContent{
+			Kind:  protocol.MarkupKindMarkdown,
+			Value: paramText + " from " + langDecorate(fn.Name),
+		},
+	}
+}
+
 func createLiteralHover(literal string) *protocol.Hover {
 	return &protocol.Hover{
 		Contents: protocol.MarkupContent{
@@ -74,8 +100,12 @@ func createLiteralHover(literal string) *protocol.Hover {
 	}
 }
 
-func langDecorate(text, lang string) string {
+func langDecorateMultiline(text, lang string) string {
 	return "```" + lang + "\n" + text + "\n```\n"
+}
+
+func langDecorate(text string) string {
+	return "`" + text + "`"
 }
 
 func parseDefinition(literal string) string {
