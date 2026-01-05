@@ -26,6 +26,7 @@ func ExtractCurrentStringLiteral(root *tree_sitter.Node, source []byte, byteOffS
 	return root.Utf8Text(source)
 }
 
+// ExtractFunctionNameFromOffset extracts closest current function name whether its a call or definition
 func ExtractFunctionNameFromOffset(root *tree_sitter.Node, source []byte, byteOffSet uint) string {
 	childLookup := ""
 	for root != nil {

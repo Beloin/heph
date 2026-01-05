@@ -32,7 +32,7 @@ func (s *DocumentTestSuite) TestNewDocument() {
 	s.Require().NoError(err)
 	s.Require().NotNil(doc)
 
-	s.Equal("test.py", doc.Name)
+	s.Equal("test.py", doc.FullPath)
 	s.NotNil(doc.Tree)
 	s.NotNil(doc.Text)
 	s.NotNil(doc.Symbols)

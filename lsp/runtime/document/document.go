@@ -9,10 +9,13 @@ import (
 )
 
 type Document struct {
-	Name string
+	// FullPath
+	FullPath string
 
 	// TODO: bsena; Maybe a tree would be better here
-	Symbols    []*symbol.Symbol // TODO: bsena; find a way to index this
+	Symbols []*symbol.Symbol // TODO: bsena; find a way to index this
+	// Targets []*specs.Target // TODO: bsena; We need the DAG from heph
+
 	Tree       *tree_sitter.Tree
 	Text       []byte // UTF-16 encoded byte array https://microsoft.github.io/language-server-protocol/specifications/specification-3-16/#textDocuments
 	TextString string // UTF-16 encoded string https://microsoft.github.io/language-server-protocol/specifications/specification-3-16/#textDocuments
@@ -25,10 +28,10 @@ func (d *Document) Close() {
 }
 
 func NewDocument(name string, tree *tree_sitter.Tree, rawText []byte) (*Document, error) {
-	doc := &Document{Name: name, Tree: tree, Text: rawText, TextString: string(rawText)}
+	doc := &Document{FullPath: name, Tree: tree, Text: rawText, TextString: string(rawText)}
 
 	// TODO: bsena; Extract target names here, look for something like target(name="...")
-	syms, err := extractSymbols(doc.Tree, doc.Text, doc.Name)
+	syms, err := extractSymbols(doc.Tree, doc.Text, doc.FullPath)
 	doc.Symbols = syms
 
 	return doc, err
@@ -41,7 +44,7 @@ func (d *Document) SwapTree(newT *tree_sitter.Tree, newText []byte) (*tree_sitte
 
 	oldTree := d.Tree
 
-	syms, err := extractSymbols(newT, newText, d.Name)
+	syms, err := extractSymbols(newT, newText, d.FullPath)
 	if err != nil {
 		return nil, err
 	}

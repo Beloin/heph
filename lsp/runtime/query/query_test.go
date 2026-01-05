@@ -19,7 +19,7 @@ var pythonTest []byte
 var classTest []byte
 
 var (
-	functionNames = []string{"my_custom_function", "my_other_function"}
+	functionNames = []string{"my_custom_function", "my_other_function", "my_argless_function"}
 	testVariables = []string{"my_custom_variable", "my_new_var", "my_custom_result"}
 	classes       = []string{"MyClass", "MySecondClass"}
 	class0Methods = []string{"mymethod", "my_second_method"}
@@ -126,6 +126,7 @@ func (suite *QuerySuite) TestFunctionParametersQuery() {
 	suite.Require().Contains(otherFuncParamNames, "arg1", "my_other_function should have arg1 parameter")
 	suite.Require().Contains(otherFuncParamNames, "arg2", "my_other_function should have arg2 parameter")
 	suite.Require().Contains(otherFuncParamNames, "arg3", "my_other_function should have arg3 parameter")
+	suite.Require().Contains(otherFuncParamNames, "arg4", "my_other_function should have arg4 parameter")
 }
 
 func (suite *QuerySuite) TestVariablesQuery() {

@@ -7,7 +7,11 @@ def my_custom_function(arg1: str, arg2) -> str:
     return "wrapped: " + arg1 + arg2
 
 
-def my_other_function(arg1, arg2, arg3=12):
+def my_other_function(arg1, arg2, arg3=12, arg4: str = "abc"):
+    pass
+
+
+def my_argless_function():
     pass
 
 

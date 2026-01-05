@@ -214,7 +214,7 @@ func Boot(ctx context.Context, opts BootOpts) (Bootstrap, error) {
 	bs.BuildFiles = buildfilesState
 
 	// TODO: bsena; to have a the current state for LSP, do something to load current graph state
-	// and keep reloading after a target change
+	// and keep reloading after a target change?
 	g := graph.NewState(root, cfg)
 	bs.Graph = g
 

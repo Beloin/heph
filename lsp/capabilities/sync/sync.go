@@ -26,8 +26,6 @@ var (
 // protocol.TextDocumentDidSaveFunc
 // protocol.TextDocumentDidCloseFunc           | Mandatory
 
-// TODO: bsena; split this better so we can test it
-
 func TextDocumentDidOpenWrapper(manager *runtime.Manager) protocol.TextDocumentDidOpenFunc {
 	// TODO: bsena; We are panicking when we read invalid file, why?
 

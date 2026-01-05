@@ -20,7 +20,7 @@ func TextDocumentHoverFuncWrapper(manager *runtime.Manager) protocol.TextDocumen
 
 		bytePos := params.Position.IndexIn(doc.TextString)
 		// TODO: bsena; Make hover context-aware, look for:
-		// - Target
+		// - Target -> TO do this we would need to build the spec ourself, or use the DAG. See below
 		// - Function
 		// - Argument
 
@@ -35,6 +35,7 @@ func TextDocumentHoverFuncWrapper(manager *runtime.Manager) protocol.TextDocumen
 
 		symbolName := doc.ExtractCurrentSymbolName(uint(bytePos))
 
+		// If is an argument inside a function call we can get the function name and args information
 		funName := doc.ExtractCurrentFunctionName(uint(bytePos))
 		if s, found := manager.Query(funName); found {
 			for _, p := range s.Parameters {
@@ -77,10 +78,13 @@ func createHover(symbol *symbol.Symbol) *protocol.Hover {
 }
 
 func createArgHover(fn *symbol.Symbol, param *symbol.Parameter) *protocol.Hover {
-	// TODO: bsena; use options or visitor pattern
 	paramText := param.Name
 	if param.Type != "" {
-		paramText = param.Name + ":" + param.Type
+		paramText += ":" + param.Type
+	}
+
+	if param.DefaultValue != "" {
+		paramText += " = " + param.DefaultValue
 	}
 
 	return &protocol.Hover{

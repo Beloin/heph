@@ -6,6 +6,7 @@ import (
 	"github.com/hephbuild/heph/lsp/runtime/builtin"
 	"github.com/hephbuild/heph/lsp/runtime/document"
 	"github.com/hephbuild/heph/lsp/runtime/symbol"
+	"github.com/hephbuild/heph/specs"
 	protocol "github.com/tliron/glsp/protocol_3_16"
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 )
@@ -22,9 +23,13 @@ type docTuple struct {
 }
 
 type Manager struct {
+	DocumentMap map[protocol.DocumentUri]*docTuple // TODO: bsena; use sync.Map
+	TargetMap   map[string]*specs.Target
+
 	BuiltinSymbols []*symbol.Symbol
-	DocumentMap    map[protocol.DocumentUri]*docTuple // TODO: bsena; use sync.Map
 	Parser         *tree_sitter.Parser
+
+	WorkspaceFolder string
 }
 
 func NewManager(parser *tree_sitter.Parser) (*Manager, error) {
@@ -60,7 +65,6 @@ func (m *Manager) SetDocument(uri protocol.DocumentUri, version protocol.Integer
 
 type Filter func(s *symbol.Symbol) bool
 
-// TODO: bsena; Return items based on Kind
 func (m *Manager) AllLoadedSymbols(filters ...Filter) []*symbol.Symbol {
 	allSymbols := m.BuiltinSymbols
 	for _, doc := range m.DocumentMap {
@@ -124,8 +128,8 @@ func (m *Manager) AllLoadedSymbolsPerKind() kindStruct {
 
 	return kindStruct{
 		AllSymbols: allSymbols,
-		Variables: vars,
-		Functions: funs,
+		Variables:  vars,
+		Functions:  funs,
 	}
 }
 
@@ -139,11 +143,19 @@ func (m *Manager) Query(symbolName string) (*symbol.Symbol, bool) {
 		return s, true
 	}
 
-	for _, doc := range m.DocumentMap {
-		if s, found := doc.Query(symbolName); found {
-			return s, true
-		}
+	if _, s, found := m.QueryDoc(symbolName); found {
+		return s, found
 	}
 
 	return nil, false
+}
+
+func (m *Manager) QueryDoc(symbolName string) (*document.Document, *symbol.Symbol, bool) {
+	for _, doc := range m.DocumentMap {
+		if s, found := doc.Query(symbolName); found {
+			return doc.Document, s, true
+		}
+	}
+
+	return nil, nil, false
 }

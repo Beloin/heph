@@ -25,15 +25,17 @@ type rawPosition struct {
 }
 
 type Parameter struct {
-	Name     string
-	Type     string
-	DocStrin string
+	Name         string
+	Type         string
+	DefaultValue string
+	DocString    string
 }
 
 type Symbol struct {
 	Name   string
 	Source string
 
+	// TODO: bsena; Test if query.ExtractFunction can read FullyQualifiedName like heph.path.cwd
 	// FullyQualifiedName references the compoosite name from class, function, method etc. names.
 	// For example, `a.b.c.d` would be a full reference name for the symbol `d`.
 	// Is a shortcut to ease queries

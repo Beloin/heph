@@ -10,6 +10,7 @@ import (
 	"github.com/hephbuild/heph/vfssimple"
 
 	"github.com/hephbuild/heph/lsp/capabilities/lang"
+	"github.com/hephbuild/heph/lsp/capabilities/lifecycle"
 	docsync "github.com/hephbuild/heph/lsp/capabilities/sync"
 
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
@@ -94,7 +95,7 @@ func newHephLSP(root *hroot.State, debug bool) (*hephLSP, error) {
 		// TODO: When initialized, look from the root all BUILD files extracting all symbols for the manager
 
 		// Lifecycle
-		Initialize:  lsp.wrapInitialize(),
+		Initialize:  lsp.wrapInitialize(manager),
 		Initialized: lsp.wrapInitialized(),
 		Shutdown:    lsp.wrapShutdown(),
 		SetTrace:    lsp.wrapSetTrace(),
@@ -111,7 +112,8 @@ func newHephLSP(root *hroot.State, debug bool) (*hephLSP, error) {
 
 		// TextDocumentCodeLens:                TextDocumentCodeLensFunc // TODO: bsena; Implement code lens to copy addr?
 		// TextDocumentReferences:  lang.TextDocumentReferencesFuncWrapper(manager),
-		// TextDocumentDeclaration: lang.TextDocumentDeclarationFuncWrapper(manager),
+		TextDocumentDeclaration: lang.TextDocumentDeclarationFuncWrapper(manager),
+		TextDocumentDefinition:  lang.TextDocumentDefinitionFuncWrapper(manager),
 	}
 	server := server.NewServer(handler, runtime.HephLanguage, debug)
 
@@ -143,8 +145,14 @@ func configureLogs(root *hroot.State, debug bool) error {
 	return nil
 }
 
-func (h *hephLSP) wrapInitialize() protocol.InitializeFunc {
+func (h *hephLSP) wrapInitialize(manager *runtime.Manager) protocol.InitializeFunc {
 	return func(context *glsp.Context, params *protocol.InitializeParams) (any, error) {
+		// Call lifecycle callback
+		err := lifecycle.InitializeCallback(manager, context, params)
+		if err != nil {
+			return nil, err
+		}
+
 		capabilities := h.h.CreateServerCapabilities()
 
 		return protocol.InitializeResult{

@@ -27,13 +27,13 @@ const functionQuery = `
 	parameters: (parameters
 			[
 				(identifier) @function.param
-				(default_parameter (identifier) @function.param)
-				(typed_parameter (identifier) @function.param (type (identifier) @function.param.type ) )
-				(typed_default_parameter (identifier) @function.param)
+				(default_parameter ( (identifier) @function.param . (_) @function.param.value ))
+				(typed_parameter (identifier) @function.param (type (identifier) @function.param.type))
+				(typed_default_parameter ( ((identifier) @function.param) . (type (identifier) @function.param.type) . ((_) @function.param.value) ))
 				(list_splat_pattern (identifier) @function.param)
 				(dictionary_splat_pattern (identifier) @function.param)
 			]
-	) @function.params
+	)? @function.params
   body: (block .
      (expression_statement
       (string (string_content) )) @function.docstring)?)
@@ -207,9 +207,12 @@ func ExtractFunctions(tree *tree_sitter.Tree, text []byte, source string) ([]*sy
 					currSymbol = ss
 				}
 
+				// First capture group
 				currSymbol.Position.RowStart = nodeRange.StartPoint.Row
 				currSymbol.Position.ColumnStart = nodeRange.StartPoint.Column
+
 				currSymbol.Name = patternValue
+				currSymbol.Signature = patternValue + "()" // empty params is the default
 				currSymbol.FullyQualifiedName = patternValue
 
 				funs[patternValue] = currSymbol
@@ -222,8 +225,16 @@ func ExtractFunctions(tree *tree_sitter.Tree, text []byte, source string) ([]*sy
 				if currParam != nil {
 					currParam.Type = patternValue
 				}
+			case "function.param.value":
+				if currParam != nil {
+					currParam.DefaultValue = patternValue
+				}
 			case "function.docstring":
 				currSymbol.DocString = sanitizeComment(patternValue)
+
+				// Last capture group
+				currSymbol.Position.RowEnd = nodeRange.EndPoint.Row
+				currSymbol.Position.ColumnEnd = nodeRange.EndPoint.Column
 			}
 
 		}
@@ -257,15 +268,25 @@ func ExtractVariables(tree *tree_sitter.Tree, text []byte, source string) ([]*sy
 		for _, capture := range match.Captures {
 			patternName := query.CaptureNames()[capture.Index]
 			patternValue := capture.Node.Utf8Text(text)
+			nodeRange := capture.Node.Range()
 
 			switch patternName {
+			case "var.name":
+				// First capture group
+				currSymbol.Position.RowStart = nodeRange.StartPoint.Row
+				currSymbol.Position.ColumnStart = nodeRange.StartPoint.Column
+
+				currSymbol.Name = patternValue
+				currSymbol.Signature = patternValue
+				currSymbol.FullyQualifiedName = patternValue
 			case "var.comment":
 				currSymbol.DocString = sanitizeComment(patternValue)
-			case "var.name":
-				currSymbol.Name = patternValue
-				currSymbol.FullyQualifiedName = patternValue
 			case "var.value":
 				currSymbol.Value = patternValue
+
+				// Last capture group
+				currSymbol.Position.RowEnd = nodeRange.EndPoint.Row
+				currSymbol.Position.ColumnEnd = nodeRange.EndPoint.Column
 			}
 
 		}
