@@ -30,6 +30,8 @@ type Manager struct {
 	Parser         *tree_sitter.Parser
 
 	WorkspaceFolder string
+
+	// dag.DAG // TODO: bsena; use the dag to know which symbols we can import into that specific BUILD file
 }
 
 func NewManager(parser *tree_sitter.Parser) (*Manager, error) {

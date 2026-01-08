@@ -39,23 +39,14 @@ const functionQuery = `
       (string (string_content) )) @function.docstring)?)
 `
 
+// TODO: bsena; In var query get also the right hand indepenently of what it is, so we can get a good hover
 const variablesQuery = `
 (
  ((comment) @var.comment)? .
  (expression_statement
 	(assignment
 		left: (identifier) @var.name
-		right: (
-			[
-				(integer)
-				(string)
-				(float)
-				(list)
-				(dictionary)
-				(call)
-				(identifier)
-				(binary_operator)
-			] @var.value)
+		right: (_) @var.value
 		))
 )
 `
@@ -201,7 +192,7 @@ func ExtractFunctions(tree *tree_sitter.Tree, text []byte, source string) ([]*sy
 
 			switch patternName {
 			case "function.name":
-				// Params query repeats Captures. We use Function Name as id
+				// Params query repeats Captures. We use Function Name as id so we dont need to make multiple queries
 				if ss, ok := funs[patternValue]; ok {
 					ss.Parameters = append(ss.Parameters, currSymbol.Parameters...)
 					currSymbol = ss

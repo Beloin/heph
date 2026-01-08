@@ -58,20 +58,35 @@ func TextDocumentHoverFuncWrapper(manager *runtime.Manager) protocol.TextDocumen
 	}
 }
 
-func createHover(symbol *symbol.Symbol) *protocol.Hover {
+func createHover(sym *symbol.Symbol) *protocol.Hover {
+	var sb strings.Builder
+
+	sb.WriteString(sym.Source)
+	sb.WriteString("\n---\n")
+
+	if sym.Is(symbol.VariableKind) {
+		varSignature := langDecorateMultiline(sym.Name + " = " + sym.Value, runtime.HephLanguage)
+		sb.WriteString(varSignature)
+	} else {
+		sb.WriteString(langDecorateMultiline(sym.Signature, runtime.HephLanguage))
+	}
+
+	sb.WriteString("\n---\n")
+	sb.WriteString(sym.DocString)
+
 	return &protocol.Hover{
 		Contents: protocol.MarkupContent{
 			Kind:  protocol.MarkupKindMarkdown,
-			Value: symbol.Source + "\n---\n" + langDecorateMultiline(symbol.Signature, runtime.HephLanguage) + "\n---\n" + symbol.DocString,
+			Value: sb.String(),
 		},
 		Range: &protocol.Range{
 			Start: protocol.Position{
-				Line:      protocol.UInteger(symbol.Position.RowStart),
-				Character: protocol.UInteger(symbol.Position.ColumnStart),
+				Line:      protocol.UInteger(sym.Position.RowStart),
+				Character: protocol.UInteger(sym.Position.ColumnStart),
 			},
 			End: protocol.Position{
-				Line:      protocol.UInteger(symbol.Position.RowEnd),
-				Character: protocol.UInteger(symbol.Position.ColumnEnd),
+				Line:      protocol.UInteger(sym.Position.RowEnd),
+				Character: protocol.UInteger(sym.Position.ColumnEnd),
 			},
 		},
 	}
@@ -113,6 +128,7 @@ func langDecorate(text string) string {
 }
 
 func parseDefinition(literal string) string {
+	// TODO: bsena; not needed to cut //
 	if s, ok := strings.CutPrefix(literal, "//"); ok {
 		t, err := specs.ParseTargetAddr(s, literal)
 		if err == nil {

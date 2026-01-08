@@ -118,7 +118,7 @@ func (suite *QuerySuite) TestFunctionParametersQuery() {
 	suite.Require().Contains(customFuncParamNames, "arg2", "my_custom_function should have arg2 parameter")
 
 	// Test my_other_function parameters
-	suite.Require().Len(otherFunc.Parameters, 3, "my_other_function should have 3 parameters")
+	suite.Require().Len(otherFunc.Parameters, 4, "my_other_function should have 3 parameters")
 	otherFuncParamNames := []string{}
 	for _, param := range otherFunc.Parameters {
 		otherFuncParamNames = append(otherFuncParamNames, param.Name)

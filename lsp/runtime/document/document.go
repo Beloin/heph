@@ -14,7 +14,9 @@ type Document struct {
 
 	// TODO: bsena; Maybe a tree would be better here
 	Symbols []*symbol.Symbol // TODO: bsena; find a way to index this
-	// Targets []*specs.Target // TODO: bsena; We need the DAG from heph
+	Calls   []*symbol.Symbol
+	Loads   []*string // TODO: bsena; Use the graph so we can know where to load thinks
+	// ExportedTargets []*specs.Target // TODO: bsena; We need the DAG from heph
 
 	Tree       *tree_sitter.Tree
 	Text       []byte // UTF-16 encoded byte array https://microsoft.github.io/language-server-protocol/specifications/specification-3-16/#textDocuments
@@ -31,8 +33,9 @@ func NewDocument(name string, tree *tree_sitter.Tree, rawText []byte) (*Document
 	doc := &Document{FullPath: name, Tree: tree, Text: rawText, TextString: string(rawText)}
 
 	// TODO: bsena; Extract target names here, look for something like target(name="...")
-	syms, err := extractSymbols(doc.Tree, doc.Text, doc.FullPath)
+	syms, calls, err := extractSymbols(doc.Tree, doc.Text, doc.FullPath)
 	doc.Symbols = syms
+	doc.Calls = calls
 
 	return doc, err
 }
@@ -44,12 +47,13 @@ func (d *Document) SwapTree(newT *tree_sitter.Tree, newText []byte) (*tree_sitte
 
 	oldTree := d.Tree
 
-	syms, err := extractSymbols(newT, newText, d.FullPath)
+	syms, calls, err := extractSymbols(newT, newText, d.FullPath)
 	if err != nil {
 		return nil, err
 	}
 
 	d.Symbols = syms
+	d.Calls = calls
 	d.Tree = newT
 	d.Text = newText
 	d.TextString = string(newText)
@@ -60,13 +64,19 @@ func (d *Document) SwapTree(newT *tree_sitter.Tree, newText []byte) (*tree_sitte
 
 // TODO: bsena; also extract targets here?
 // So we can have a custom symbol that is a spec.Target?
-func extractSymbols(tree *tree_sitter.Tree, text []byte, source string) ([]*symbol.Symbol, error) {
+// extractSymbols reads all symbols from document
+// returns document symbols, document calls and error
+func extractSymbols(tree *tree_sitter.Tree, text []byte, source string) ([]*symbol.Symbol, []*symbol.Symbol, error) {
+	// TODO: bsena; LOOK FOR LOAD("") AND GO EXTRACT EACH ONE AFTER this
+	// CREATE A TREE TO KNOW WHICH EXPECT WHICH, OR A DAG
 	symbols, err := query.QuerySymbols(tree, text, source)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return symbols, nil
+	calls, err := query.QueryCalls(tree, text, source)
+
+	return symbols, calls, err
 }
 
 func (d *Document) ExtractCurrentStringLiteral(byteOffSet uint) string {

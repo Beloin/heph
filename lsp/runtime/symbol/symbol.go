@@ -12,6 +12,12 @@ const (
 	FieldKind
 )
 
+// Calls types
+const (
+	FunctionCallKind = iota + 4
+	TargetCallKind
+)
+
 type Position struct {
 	RowStart    uint
 	ColumnStart uint

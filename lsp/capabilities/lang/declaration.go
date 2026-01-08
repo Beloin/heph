@@ -1,10 +1,16 @@
 package lang
 
 import (
+	"path"
+
 	"github.com/hephbuild/heph/lsp/runtime"
+	"github.com/hephbuild/heph/specs"
+	"github.com/tliron/commonlog"
 	"github.com/tliron/glsp"
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
+
+var logger = commonlog.GetLogger("lifecycle")
 
 func TextDocumentDeclarationFuncWrapper(manager *runtime.Manager) protocol.TextDocumentDeclarationFunc {
 	// TODO: bsena; I think we need to have a parsed heph tree/graph to know where to go when
@@ -38,9 +44,35 @@ func TextDocumentDefinitionFuncWrapper(manager *runtime.Manager) protocol.TextDo
 	}
 }
 
+// TODO: bsena; just return nil
 func extractLocation(manager *runtime.Manager, uri string, pos *protocol.Position) (*protocol.Location, bool) {
 	if doc, found := manager.GetDocument(uri); found {
 		pos := uint(pos.IndexIn(doc.TextString))
+
+		// If its target address, open from current workspace
+		if literal := doc.ExtractCurrentStringLiteral(pos); literal != "" {
+			// TODO: bsena; we need to go to that folder's BUILD
+			// since target is usually a FOLDER we would need to go to the first one
+			t, err := specs.ParseTargetAddr(literal, literal)
+			logger.Noticef("Found literal target: %#v", t)
+			if err == nil {
+				p := path.Join(manager.WorkspaceFolder, t.Package)
+				logger.Noticef("Full path: %s", p)
+				return &protocol.Location{
+					URI: p,
+					Range: protocol.Range{
+						Start: protocol.Position{
+							Line:      0,
+							Character: 0,
+						},
+						End: protocol.Position{
+							Line:      0,
+							Character: 0,
+						},
+					},
+				}, true
+			}
+		}
 
 		if symbolName := doc.ExtractCurrentSymbolName(pos); symbolName != "" {
 			if doc, sym, found := manager.QueryDoc(symbolName); found {

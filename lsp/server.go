@@ -114,6 +114,9 @@ func newHephLSP(root *hroot.State, debug bool) (*hephLSP, error) {
 		// TextDocumentReferences:  lang.TextDocumentReferencesFuncWrapper(manager),
 		TextDocumentDeclaration: lang.TextDocumentDeclarationFuncWrapper(manager),
 		TextDocumentDefinition:  lang.TextDocumentDefinitionFuncWrapper(manager),
+
+		// TODO: bsena; Need to implement workspace also, so we can rename files etc.
+		// WorkspaceDidRenameFiles: protocol.WorkspaceDidRenameFilesFunc,
 	}
 	server := server.NewServer(handler, runtime.HephLanguage, debug)
 

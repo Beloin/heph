@@ -24,3 +24,6 @@ my_custom_result = my_custom_function(my_custom_variable, "")
 
 print(my_custom_result)
 
+print("literal_value")
+
+print(22)
