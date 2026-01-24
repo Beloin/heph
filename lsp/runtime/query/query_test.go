@@ -19,7 +19,7 @@ var pythonTest []byte
 var classTest []byte
 
 var (
-	functionNames = []string{"my_custom_function", "my_other_function", "my_argless_function"}
+	functionNames = []string{"my_custom_function", "my_other_function", "my_argless_function", "my_documented_function"}
 	testVariables = []string{"my_custom_variable", "my_new_var", "my_custom_result"}
 	classes       = []string{"MyClass", "MySecondClass"}
 	class0Methods = []string{"mymethod", "my_second_method"}
@@ -144,6 +144,35 @@ func (suite *QuerySuite) TestVariablesQuery() {
 	suite.Require().NotNil(symbols)
 	suite.Require().NotEmpty(symbols)
 	suite.Require().ElementsMatch(testVariables, names)
+}
+
+func (suite *QuerySuite) TestFunctionArgsDoc() {
+	parser := suite.newParser()
+	pythonTree := parser.Parse(pythonTest, nil)
+
+	symbols, err := query.ExtractFunctions(pythonTree, pythonTest, "")
+	suite.Require().NoError(err)
+
+	// Find my_documented_function
+	var documentedFunc *symbol.Symbol
+	for _, s := range symbols {
+		if s.Name == "my_documented_function" {
+			documentedFunc = s
+			break
+		}
+	}
+	suite.Require().NotNil(documentedFunc, "my_documented_function should be found")
+
+	suite.Require().Len(documentedFunc.Parameters, 2, "my_documented_function should have 2 parameters")
+
+	suite.Require().Equal("param1", documentedFunc.Parameters[0].Name)
+	suite.Require().Equal("str", documentedFunc.Parameters[0].Type)
+	suite.Require().Equal("The first parameter.", documentedFunc.Parameters[0].DocString)
+
+	suite.Require().Equal("param2", documentedFunc.Parameters[1].Name)
+	suite.Require().Equal("int", documentedFunc.Parameters[1].Type)
+	suite.Require().Equal("The second parameter. Defaults to 0.", documentedFunc.Parameters[1].DocString)
+	suite.Require().Equal("0", documentedFunc.Parameters[1].Value)
 }
 
 func TestQuerySuite(t *testing.T) {

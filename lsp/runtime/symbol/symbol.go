@@ -1,7 +1,5 @@
 package symbol
 
-import "strings"
-
 type SymbolKind int
 
 // Kind types
@@ -33,7 +31,7 @@ type rawPosition struct {
 type Parameter struct {
 	Name         string
 	Type         string
-	DefaultValue string
+	Value string
 	DocString    string
 }
 
@@ -50,8 +48,6 @@ type Symbol struct {
 	Kind      SymbolKind
 	Signature string
 
-	// TODO: bsena; Creat a struct to have name and docstring extracted from "args" function docstring
-	// also add type as string if it exists
 	Parameters []*Parameter
 
 	// Value is the current literal value for a variable
@@ -67,44 +63,4 @@ type Symbol struct {
 
 func (s *Symbol) Is(kind SymbolKind) bool {
 	return s.Kind == kind
-}
-
-// Args return symbol args if Symbol.Kind == FunctionKind
-// TODO: bsena; Extract params from whitin query itself
-func (s *Symbol) Args() []string {
-	if !s.Is(FunctionKind) {
-		return nil
-	}
-
-	return s.extractFunctionArgs()
-}
-
-// extractFunctionArgs extracts arguments from a function signature.
-// Returns the arguments as a slice of strings and a boolean indicating if arguments were found.
-func (s *Symbol) extractFunctionArgs() []string {
-	signature, ok := strings.CutPrefix(s.Signature, s.Name)
-	if !ok {
-		return nil
-	}
-
-	// TODO: instead of cut, just do a slice
-	signature, ok = strings.CutPrefix(signature, "(")
-	if !ok {
-		return nil
-	}
-	signature, ok = strings.CutSuffix(signature, ")")
-	if !ok {
-		return nil
-	}
-
-	if signature == "" {
-		return nil
-	}
-
-	args := strings.Split(signature, ",")
-	for i, arg := range args {
-		args[i] = strings.TrimSpace(arg)
-	}
-
-	return args
 }

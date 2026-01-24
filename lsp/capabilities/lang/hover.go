@@ -6,7 +6,6 @@ import (
 
 	"github.com/hephbuild/heph/lsp/runtime"
 	"github.com/hephbuild/heph/lsp/runtime/symbol"
-	"github.com/hephbuild/heph/specs"
 	"github.com/tliron/glsp"
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
@@ -23,11 +22,6 @@ func TextDocumentHoverFuncWrapper(manager *runtime.Manager) protocol.TextDocumen
 		// - Target -> TO do this we would need to build the spec ourself, or use the DAG. See below
 		// - Function
 		// - Argument
-
-		// TODO: bsena; also query for target //build/target:run
-		// For now extract the targets from each document loaded into a target spec, so we can load it in runtime?
-		// In the future is the best to have a Heph Server that runs and change at each file change, so we always have a fast
-		// DAG available
 
 		if literal := doc.ExtractCurrentStringLiteral(uint(bytePos)); literal != "" {
 			return createLiteralHover(literal), nil
@@ -65,7 +59,7 @@ func createHover(sym *symbol.Symbol) *protocol.Hover {
 	sb.WriteString("\n---\n")
 
 	if sym.Is(symbol.VariableKind) {
-		varSignature := langDecorateMultiline(sym.Name + " = " + sym.Value, runtime.HephLanguage)
+		varSignature := langDecorateMultiline(sym.Name+" = "+sym.Value, runtime.HephLanguage)
 		sb.WriteString(varSignature)
 	} else {
 		sb.WriteString(langDecorateMultiline(sym.Signature, runtime.HephLanguage))
@@ -93,19 +87,28 @@ func createHover(sym *symbol.Symbol) *protocol.Hover {
 }
 
 func createArgHover(fn *symbol.Symbol, param *symbol.Parameter) *protocol.Hover {
-	paramText := param.Name
+	var sb strings.Builder
+
+	sb.WriteString(param.Name)
+
 	if param.Type != "" {
-		paramText += ":" + param.Type
+		sb.WriteString(":" + param.Type)
 	}
 
-	if param.DefaultValue != "" {
-		paramText += " = " + param.DefaultValue
+	if param.Value != "" {
+		sb.WriteString(" = " + param.Value)
+	}
+
+	sb.WriteString(" from " + langDecorate(fn.Name))
+	if param.DocString != "" {
+		sb.WriteString("\n---\n")
+		sb.WriteString(param.DocString)
 	}
 
 	return &protocol.Hover{
 		Contents: protocol.MarkupContent{
 			Kind:  protocol.MarkupKindMarkdown,
-			Value: paramText + " from " + langDecorate(fn.Name),
+			Value: sb.String(),
 		},
 	}
 }
@@ -128,12 +131,8 @@ func langDecorate(text string) string {
 }
 
 func parseDefinition(literal string) string {
-	// TODO: bsena; not needed to cut //
-	if s, ok := strings.CutPrefix(literal, "//"); ok {
-		t, err := specs.ParseTargetAddr(s, literal)
-		if err == nil {
-			return fmt.Sprintf("%q Heph from %s", literal, t)
-		}
+	if ok := strings.HasPrefix(literal, "//"); ok {
+		return fmt.Sprintf("Heph Package: %q", literal)
 	}
 
 	return literal

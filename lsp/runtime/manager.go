@@ -1,7 +1,10 @@
 package runtime
 
 import (
+	"os"
+	"path"
 	"slices"
+	"strings"
 
 	"github.com/hephbuild/heph/lsp/runtime/builtin"
 	"github.com/hephbuild/heph/lsp/runtime/document"
@@ -16,11 +19,13 @@ const HephLanguage = "heph"
 var Version = "0.0.1"
 
 type docTuple struct {
-	*document.Document
+	Document *document.Document
 
 	// Last reported version
 	version protocol.Integer
 }
+
+// TODO: bsena; Remove protocol usage here, use raw values
 
 type Manager struct {
 	DocumentMap map[protocol.DocumentUri]*docTuple // TODO: bsena; use sync.Map
@@ -53,8 +58,86 @@ func (m *Manager) GetDocument(uri protocol.DocumentUri) (*document.Document, boo
 	return nil, false
 }
 
-func (m *Manager) SetDocument(uri protocol.DocumentUri, version protocol.Integer, doc *document.Document) {
+func (m *Manager) NewDocument(name string, tree *tree_sitter.Tree, rawText []byte, version int32) (*document.Document, error) {
+	newDoc, err := document.NewDocument(name, tree, rawText)
+	if err != nil {
+		return nil, err
+	}
+
+	m.setDocument(name, version, newDoc)
+
+	// Load all other documents from all newDoc.Loads
+	// go m.loadDocumentsFromLoads(newDoc)
+	m.loadDocumentsFromLoads(newDoc)
+
+	return newDoc, nil
+}
+
+// loadDocumentsFromLoads loads documents from load paths
+func (m *Manager) loadDocumentsFromLoads(doc *document.Document) {
+	for _, loadPath := range doc.Loads {
+		if loadPath == "" {
+			continue
+		}
+
+		// Convert load path to folder path
+		folderPath := path.Join(m.WorkspaceFolder, loadPath)
+
+		// Read directory
+		entries, err := os.ReadDir(folderPath)
+		if err != nil {
+			continue
+		}
+
+		for _, entry := range entries {
+			if entry.IsDir() {
+				continue
+			}
+
+			// TODO: bsena; Probably need to read for BUILD.* or *.BUILD
+			if !strings.Contains(entry.Name(), "BUILD") {
+				continue
+			}
+
+			filePath := path.Join(folderPath, entry.Name())
+
+			// Skip if already loaded
+			if _, found := m.GetDocument(protocol.DocumentUri(filePath)); found {
+				continue
+			}
+
+			// Read file content
+			content, err := os.ReadFile(filePath)
+			if err != nil {
+				continue
+			}
+
+			// Parse the file
+			tree := m.Parser.Parse(content, nil)
+			if tree == nil {
+				continue
+			}
+
+			// Create new document
+			newDoc, err := document.NewDocument(filePath, tree, content)
+			if err != nil {
+				tree.Close()
+				continue
+			}
+
+			m.setDocument(protocol.DocumentUri(filePath), 0, newDoc)
+			doc.AddLoadedDoc(newDoc)
+
+			// Recursively load its loads
+			m.loadDocumentsFromLoads(newDoc)
+		}
+	}
+}
+
+func (m *Manager) setDocument(uri protocol.DocumentUri, version protocol.Integer, doc *document.Document) {
 	if tuple, found := m.DocumentMap[uri]; found {
+		tuple.Document.Close()
+
 		tuple.Document = doc
 		tuple.version = version
 	} else {
@@ -72,7 +155,7 @@ func (m *Manager) AllLoadedSymbols(filters ...Filter) []*symbol.Symbol {
 	for _, doc := range m.DocumentMap {
 		// allSymbols = slices.Concat(allSymbols, doc.Symbols)
 
-		for _, smb := range doc.Symbols {
+		for _, smb := range doc.Document.Symbols {
 			shoulAdd := true
 			for _, f := range filters {
 				if !f(smb) {
@@ -114,7 +197,7 @@ func (m *Manager) AllLoadedSymbolsPerKind() kindStruct {
 	}
 
 	for _, doc := range m.DocumentMap {
-		for _, smb := range doc.Symbols {
+		for _, smb := range doc.Document.Symbols {
 			switch smb.Kind {
 			case symbol.FunctionKind:
 				funs = append(funs, smb)
@@ -154,7 +237,7 @@ func (m *Manager) Query(symbolName string) (*symbol.Symbol, bool) {
 
 func (m *Manager) QueryDoc(symbolName string) (*document.Document, *symbol.Symbol, bool) {
 	for _, doc := range m.DocumentMap {
-		if s, found := doc.Query(symbolName); found {
+		if s, found := doc.Document.Query(symbolName); found {
 			return doc.Document, s, true
 		}
 	}

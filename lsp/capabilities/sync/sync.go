@@ -4,7 +4,6 @@ import (
 	"errors"
 
 	"github.com/hephbuild/heph/lsp/runtime"
-	"github.com/hephbuild/heph/lsp/runtime/document"
 	"github.com/tliron/glsp"
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 
@@ -27,7 +26,7 @@ var (
 // protocol.TextDocumentDidCloseFunc           | Mandatory
 
 func TextDocumentDidOpenWrapper(manager *runtime.Manager) protocol.TextDocumentDidOpenFunc {
-	// TODO: bsena; We are panicking when we read invalid file, why?
+	// TODO: bsena; We are panicking when we read invalid syntax file, why?
 
 	return func(context *glsp.Context, params *protocol.DidOpenTextDocumentParams) error {
 		parser := manager.Parser
@@ -42,7 +41,7 @@ func TextDocumentDidOpenWrapper(manager *runtime.Manager) protocol.TextDocumentD
 
 			_, err := doc.SwapTree(newTree, bts)
 
-			return err
+			return errors.Join(ErrInvalidTree, err)
 		}
 
 		newTree := parser.Parse(bts, nil)
@@ -50,13 +49,12 @@ func TextDocumentDidOpenWrapper(manager *runtime.Manager) protocol.TextDocumentD
 			return ErrInvalidTree
 		}
 
-		newDoc, err := document.NewDocument(params.TextDocument.URI, newTree, bts)
-		if err != nil {
-			return err
-		}
-
 		version := params.TextDocument.Version
-		manager.SetDocument(params.TextDocument.URI, version, newDoc)
+		_, err := manager.NewDocument(params.TextDocument.URI, newTree, bts, version)
+		if err != nil {
+			newTree.Close()
+			return ErrInvalidTree
+		}
 
 		return nil
 	}
@@ -104,7 +102,7 @@ func TextDocumentDidChangeFuncWrapper(manager *runtime.Manager) protocol.TextDoc
 
 				_, err := doc.SwapTree(newTree, newText)
 				if err != nil {
-					return err
+					return errors.Join(ErrInvalidTree, err)
 				}
 
 			}
@@ -115,7 +113,8 @@ func TextDocumentDidChangeFuncWrapper(manager *runtime.Manager) protocol.TextDoc
 
 				_, err := doc.SwapTree(newTree, bts)
 				if err != nil {
-					return err
+					newTree.Close()
+					return errors.Join(ErrInvalidTree, err)
 				}
 
 			}

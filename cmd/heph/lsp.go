@@ -25,10 +25,9 @@ var servelspCmd = &cobra.Command{
 	Use:     "serve",
 	Short:   "Serve LSP",
 	Aliases: []string{"s"},
-	// Args:              cobra.ExactArgs(1), // TODO: bsena; Add stdin vs address
 	ValidArgsFunction: ValidArgsFunctionTargets,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// TODO: bsena; Probably we need to add options such as "--debug", "--address" and "--verbose"
+		// TODO: bsena; Probably we need to add options such as "--debug" and "--verbose"
 		// TODO: bsena; To implement more about the starlark, see --builtin-paths
 
 		// TODO: bsena; glsp stoles our ^C, only close with ^D, fix it

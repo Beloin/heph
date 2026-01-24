@@ -2,9 +2,10 @@ package lang
 
 import (
 	"path"
+	"strings"
 
 	"github.com/hephbuild/heph/lsp/runtime"
-	"github.com/hephbuild/heph/specs"
+	"github.com/hephbuild/heph/lsp/runtime/symbol"
 	"github.com/tliron/commonlog"
 	"github.com/tliron/glsp"
 	protocol "github.com/tliron/glsp/protocol_3_16"
@@ -21,6 +22,7 @@ func TextDocumentDeclarationFuncWrapper(manager *runtime.Manager) protocol.TextD
 
 	return func(context *glsp.Context, params *protocol.DeclarationParams) (any, error) {
 		if location, found := extractLocation(manager, params.TextDocument.URI, &params.Position); found {
+			logger.Noticef("Declaration location: %v", location)
 			return location, nil
 		}
 
@@ -37,6 +39,7 @@ func TextDocumentDefinitionFuncWrapper(manager *runtime.Manager) protocol.TextDo
 
 	return func(context *glsp.Context, params *protocol.DefinitionParams) (any, error) {
 		if location, found := extractLocation(manager, params.TextDocument.URI, &params.Position); found {
+			logger.Noticef("Declaration location: %v", location)
 			return location, nil
 		}
 
@@ -44,22 +47,22 @@ func TextDocumentDefinitionFuncWrapper(manager *runtime.Manager) protocol.TextDo
 	}
 }
 
-// TODO: bsena; just return nil
 func extractLocation(manager *runtime.Manager, uri string, pos *protocol.Position) (*protocol.Location, bool) {
 	if doc, found := manager.GetDocument(uri); found {
 		pos := uint(pos.IndexIn(doc.TextString))
 
 		// If its target address, open from current workspace
 		if literal := doc.ExtractCurrentStringLiteral(pos); literal != "" {
-			// TODO: bsena; we need to go to that folder's BUILD
-			// since target is usually a FOLDER we would need to go to the first one
-			t, err := specs.ParseTargetAddr(literal, literal)
-			logger.Noticef("Found literal target: %#v", t)
-			if err == nil {
-				p := path.Join(manager.WorkspaceFolder, t.Package)
-				logger.Noticef("Full path: %s", p)
+			// Go to target location
+			if strings.HasPrefix(literal, "//") {
+
+				// Fallback to default BUILD
+				literal = strings.Split(literal, ":")[0]
+				literal += "/BUILD"
+				p := path.Join(manager.WorkspaceFolder, literal)
+
 				return &protocol.Location{
-					URI: p,
+					URI: addProtocol(p),
 					Range: protocol.Range{
 						Start: protocol.Position{
 							Line:      0,
@@ -75,23 +78,57 @@ func extractLocation(manager *runtime.Manager, uri string, pos *protocol.Positio
 		}
 
 		if symbolName := doc.ExtractCurrentSymbolName(pos); symbolName != "" {
+			// First check loaded documents
+			for _, loadedDoc := range doc.DocLoads {
+				if sym, found := loadedDoc.Query(symbolName); found {
+					return buildLocationFromSymbol(loadedDoc.FullPath, sym), true
+				}
+			}
+
+			// Fallback to all documents
 			if doc, sym, found := manager.QueryDoc(symbolName); found {
-				return &protocol.Location{
-					URI: doc.FullPath,
-					Range: protocol.Range{
-						Start: protocol.Position{
-							Line:      protocol.UInteger(sym.Position.RowStart),
-							Character: protocol.UInteger(sym.Position.ColumnStart),
-						},
-						End: protocol.Position{
-							Line:      protocol.UInteger(sym.Position.RowEnd),
-							Character: protocol.UInteger(sym.Position.ColumnEnd),
-						},
-					},
-				}, true
+				return buildLocationFromSymbol(doc.FullPath, sym), true
+			}
+		}
+
+		if symbolName := doc.ExtractCurrentFunctionName(pos); symbolName != "" {
+			// First check loaded documents
+			for _, loadedDoc := range doc.DocLoads {
+				logger.Noticef("Found function name: %s", symbolName)
+				if sym, found := loadedDoc.Query(symbolName); found {
+					return buildLocationFromSymbol(loadedDoc.FullPath, sym), true
+				}
+			}
+
+			// Fallback to all documents
+			if doc, sym, found := manager.QueryDoc(symbolName); found {
+				return buildLocationFromSymbol(doc.FullPath, sym), true
 			}
 		}
 	}
 
 	return nil, false
+}
+
+func buildLocationFromSymbol(uri string, sym *symbol.Symbol) *protocol.Location {
+	return &protocol.Location{
+		URI: addProtocol(uri),
+		Range: protocol.Range{
+			Start: protocol.Position{
+				Line:      protocol.UInteger(sym.Position.RowStart),
+				Character: protocol.UInteger(sym.Position.ColumnStart),
+			},
+			End: protocol.Position{
+				Line:      protocol.UInteger(sym.Position.RowEnd),
+				Character: protocol.UInteger(sym.Position.ColumnEnd),
+			},
+		},
+	}
+}
+
+func addProtocol(uri string) string {
+	if !strings.HasPrefix(uri, "file://") {
+		uri = "file://" + uri
+	}
+	return uri
 }

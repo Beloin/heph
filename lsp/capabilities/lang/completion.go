@@ -20,8 +20,6 @@ func TextDocumentCompletionFuncWrapper(manager *runtime.Manager) protocol.TextDo
 		// TODO: bsena; ~Read based in position so we can get classes' methods~
 		// We actually are not going to do that, we will extract custom builtins based in hbuiltin
 
-		allPerKind := manager.AllLoadedSymbolsPerKind()
-
 		// If is function we can get args completion
 		if doc, found := manager.GetDocument(params.TextDocument.URI); found {
 			byteOffset := params.Position.IndexIn(doc.TextString)
@@ -33,23 +31,28 @@ func TextDocumentCompletionFuncWrapper(manager *runtime.Manager) protocol.TextDo
 					if args != nil {
 						completionItems = createCompletionItemForArgs(args, s)
 					}
-
-					for _, symbol := range allPerKind.Variables {
-						compItem := createCompletionItem(symbol)
-						completionItems = append(completionItems, compItem)
-					}
-
-					for _, symbol := range allPerKind.Functions {
-						compItem := createCompletionItem(symbol)
-						completionItems = append(completionItems, compItem)
-					}
-
-					return completionItems, nil
 				}
 			}
+
+			// Append current doc symbols
+			for _, s := range doc.Symbols {
+				compItem := createCompletionItem(s)
+				completionItems = append(completionItems, compItem)
+			}
+
+			// Complete symbols that are loaded by "load"
+			for _, loadedDoc := range doc.DocLoads {
+				for _, s := range loadedDoc.Symbols {
+					compItem := createCompletionItem(s)
+					completionItems = append(completionItems, compItem)
+				}
+			}
+
+			return completionItems, nil
 		}
 
-		for _, symbol := range allPerKind.AllSymbols {
+		allPerKind := manager.AllLoadedSymbols()
+		for _, symbol := range allPerKind {
 			compItem := createCompletionItem(symbol)
 			completionItems = append(completionItems, compItem)
 		}

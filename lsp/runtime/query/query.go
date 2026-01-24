@@ -28,8 +28,8 @@ const functionQuery = `
 			[
 				(identifier) @function.param
 				(default_parameter ( (identifier) @function.param . (_) @function.param.value ))
-				(typed_parameter (identifier) @function.param (type (identifier) @function.param.type))
-				(typed_default_parameter ( ((identifier) @function.param) . (type (identifier) @function.param.type) . ((_) @function.param.value) ))
+				(typed_parameter (identifier) @function.param (type (_) @function.param.type))
+				(typed_default_parameter ( ((identifier) @function.param) . (type (_) @function.param.type) . ((_) @function.param.value) ))
 				(list_splat_pattern (identifier) @function.param)
 				(dictionary_splat_pattern (identifier) @function.param)
 			]
@@ -218,7 +218,7 @@ func ExtractFunctions(tree *tree_sitter.Tree, text []byte, source string) ([]*sy
 				}
 			case "function.param.value":
 				if currParam != nil {
-					currParam.DefaultValue = patternValue
+					currParam.Value = patternValue
 				}
 			case "function.docstring":
 				currSymbol.DocString = sanitizeComment(patternValue)
@@ -230,6 +230,7 @@ func ExtractFunctions(tree *tree_sitter.Tree, text []byte, source string) ([]*sy
 
 		}
 
+		parseArgsFromDocstring(currSymbol.DocString, currSymbol.Parameters)
 	}
 
 	return slices.Collect(maps.Values(funs)), nil
@@ -313,4 +314,32 @@ func processCommentLines(comment string) string {
 	}
 
 	return strings.Join(processedLines, "\n")
+}
+
+func parseArgsFromDocstring(docstring string, params []*symbol.Parameter) {
+	lines := strings.Split(docstring, "\n")
+	inArgs := false
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "Args:" {
+			inArgs = true
+			continue
+		}
+		if inArgs && strings.Contains(line, ":") {
+			parts := strings.SplitN(line, ":", 2)
+			if len(parts) == 2 {
+				namePart := strings.TrimSpace(parts[0])
+				desc := strings.TrimSpace(parts[1])
+				if idx := strings.Index(namePart, " ("); idx > 0 {
+					paramName := namePart[:idx]
+					for _, p := range params {
+						if p.Name == paramName {
+							p.DocString = desc
+							break
+						}
+					}
+				}
+			}
+		}
+	}
 }
