@@ -39,7 +39,6 @@ const functionQuery = `
       (string (string_content) )) @function.docstring)?)
 `
 
-// TODO: bsena; In var query get also the right hand indepenently of what it is, so we can get a good hover
 const variablesQuery = `
 (
  ((comment) @var.comment)? .
@@ -180,20 +179,21 @@ func ExtractFunctions(tree *tree_sitter.Tree, text []byte, source string) ([]*sy
 
 	matches := cursor.Matches(query, tree.RootNode(), text)
 
-	funs := map[string]*symbol.Symbol{}
+	funs := map[uintptr]*symbol.Symbol{}
 
 	for match := matches.Next(); match != nil; match = matches.Next() {
 		currSymbol := &symbol.Symbol{Kind: symbol.FunctionKind, Source: source}
 		var currParam *symbol.Parameter
 		for _, capture := range match.Captures {
+			currentNode := &capture.Node
 			patternName := query.CaptureNames()[capture.Index]
-			nodeRange := capture.Node.Range()
-			patternValue := capture.Node.Utf8Text(text)
+			nodeRange := currentNode.Range()
+			patternValue := currentNode.Utf8Text(text)
 
 			switch patternName {
 			case "function.name":
 				// Params query repeats Captures. We use Function Name as id so we dont need to make multiple queries
-				if ss, ok := funs[patternValue]; ok {
+				if ss, ok := funs[currentNode.Id()]; ok {
 					ss.Parameters = append(ss.Parameters, currSymbol.Parameters...)
 					currSymbol = ss
 				}
@@ -206,7 +206,7 @@ func ExtractFunctions(tree *tree_sitter.Tree, text []byte, source string) ([]*sy
 				currSymbol.Signature = patternValue + "()" // empty params is the default
 				currSymbol.FullyQualifiedName = patternValue
 
-				funs[patternValue] = currSymbol
+				funs[currentNode.Id()] = currSymbol
 			case "function.params":
 				currSymbol.Signature = currSymbol.Name + patternValue
 			case "function.param":
@@ -316,6 +316,7 @@ func processCommentLines(comment string) string {
 	return strings.Join(processedLines, "\n")
 }
 
+// TODO: bsena; This parses only the first line
 func parseArgsFromDocstring(docstring string, params []*symbol.Parameter) {
 	lines := strings.Split(docstring, "\n")
 	inArgs := false

@@ -244,3 +244,19 @@ func (m *Manager) QueryDoc(symbolName string) (*document.Document, *symbol.Symbo
 
 	return nil, nil, false
 }
+
+type callQueryResult struct {
+	Doc     *document.Document
+	Symbols []*symbol.Symbol
+}
+
+func (m *Manager) QueryCallsDoc(symbolName string) []callQueryResult {
+	res := []callQueryResult{}
+	for _, doc := range m.DocumentMap {
+		if calls := doc.Document.QueryCalls(symbolName); len(calls) > 0 {
+			res = append(res, callQueryResult{doc.Document, calls})
+		}
+	}
+
+	return res
+}

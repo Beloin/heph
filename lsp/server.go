@@ -111,7 +111,7 @@ func newHephLSP(root *hroot.State, debug bool) (*hephLSP, error) {
 		TextDocumentSignatureHelp: lang.TextDocumentSignatureHelpFuncWrapper(manager),
 
 		// TextDocumentCodeLens:                TextDocumentCodeLensFunc // TODO: bsena; Implement code lens to copy addr?
-		// TextDocumentReferences:  lang.TextDocumentReferencesFuncWrapper(manager),
+		TextDocumentReferences:  lang.TextDocumentReferencesFuncWrapper(manager),
 		TextDocumentDeclaration: lang.TextDocumentDeclarationFuncWrapper(manager),
 		TextDocumentDefinition:  lang.TextDocumentDefinitionFuncWrapper(manager),
 

@@ -10,7 +10,11 @@ import (
 )
 
 const callQuery = `
-(call function: (identifier) @call.name . (argument_list (_) @call.arg) ) @call.stmt
+(call function: (identifier) @call.name . (argument_list (_) @call.arg)? ) @call.stmt
+`
+
+const argQuery = `
+(argument_list (_) @call.arg)?
 `
 
 func QueryCalls(tree *tree_sitter.Tree, text []byte, source string) ([]*symbol.Symbol, error) {
@@ -28,19 +32,20 @@ func QueryCalls(tree *tree_sitter.Tree, text []byte, source string) ([]*symbol.S
 	defer cursor.Close()
 
 	matches := cursor.Matches(query, tree.RootNode(), text)
-	funs := map[string]*symbol.Symbol{}
+	funs := map[uintptr]*symbol.Symbol{}
 
 	for match := matches.Next(); match != nil; match = matches.Next() {
 		currSymbol := &symbol.Symbol{Kind: symbol.FunctionCallKind, Source: source}
 		for _, capture := range match.Captures {
+			currentNode := &capture.Node
 			patternName := query.CaptureNames()[capture.Index]
-			nodeRange := capture.Node.Range()
-			patternValue := capture.Node.Utf8Text(text)
+			nodeRange := currentNode.Range()
+			patternValue := currentNode.Utf8Text(text)
 
 			switch patternName {
 			case "call.name":
-				// Params query repeats Captures. We use Call Name as id so we dont need to make multiple queries
-				if ss, ok := funs[patternValue]; ok {
+				// Params query repeats Captures. We use NodeId so we dont need to make multiple queries
+				if ss, ok := funs[currentNode.Id()]; ok {
 					ss.Parameters = append(ss.Parameters, currSymbol.Parameters...)
 					currSymbol = ss
 				}
@@ -50,14 +55,16 @@ func QueryCalls(tree *tree_sitter.Tree, text []byte, source string) ([]*symbol.S
 				currSymbol.Position.RowStart = nodeRange.StartPoint.Row
 				currSymbol.Position.ColumnStart = nodeRange.StartPoint.Column
 
-				funs[patternValue] = currSymbol
+				funs[currentNode.Id()] = currSymbol
 			case "call.arg":
 				newParam := symbol.Parameter{Name: strconv.Itoa(len(currSymbol.Parameters)), Value: patternValue}
 				currSymbol.Parameters = append(currSymbol.Parameters, &newParam)
-			case "call.stmt":
-				currSymbol.Signature = patternValue
+
+				// Last pattern
 				currSymbol.Position.RowEnd = nodeRange.EndPoint.Row
 				currSymbol.Position.ColumnEnd = nodeRange.EndPoint.Column
+			case "call.stmt":
+				currSymbol.Signature = patternValue
 			}
 		}
 	}

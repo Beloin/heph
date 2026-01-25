@@ -115,6 +115,10 @@ func (d *Document) Query(symbolName string) (*symbol.Symbol, bool) {
 	return symbol.FindSymbol(d.Symbols, symbolName)
 }
 
+func (d *Document) QueryCalls(symbolName string) []*symbol.Symbol {
+	return symbol.FindCalls(d.Calls, symbolName)
+}
+
 func (d *Document) AddLoadedDoc(doc *Document) {
 	d.DocLoads = append(d.DocLoads, doc)
 }

@@ -15,9 +15,7 @@ import (
 //go:embed testdata/call_test.py
 var callTest []byte
 
-var (
-	expectedFunctionCalls = []string{"load", "print", "my_other_call"}
-)
+var expectedFunctionCalls = []string{"load", "print", "my_other_call", "fun_no_args", "target", "fun_with_no_args", "fun_with_no_args"}
 
 type CallQuerySuite struct {
 	suite.Suite
