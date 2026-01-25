@@ -128,10 +128,3 @@ func buildLocationFromSymbol(uri string, sym *symbol.Symbol) *protocol.Location 
 		},
 	}
 }
-
-func addProtocol(uri string) string {
-	if !strings.HasPrefix(uri, "file://") {
-		uri = "file://" + uri
-	}
-	return uri
-}

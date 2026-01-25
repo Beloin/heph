@@ -33,7 +33,7 @@ func findReferences(manager *runtime.Manager, symbolName string) []protocol.Loca
 			doc := call.Doc
 			for _, sym := range call.Symbols {
 				loc := protocol.Location{
-					URI: doc.FullPath,
+					URI: addProtocol(doc.FullPath),
 					Range: protocol.Range{
 						Start: protocol.Position{
 							Line:      protocol.UInteger(sym.Position.RowStart),
