@@ -10,6 +10,9 @@ import (
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
+// TODO: bsena; DECLARATIONS AND DEFINITIONS SHOULD GO ONLY TO FILES THAT ARE LOADED WITH `load(...)`
+// TODO: bsena; REFERENCES SHOULD SEARCH ONLY TO FILES THAT ARE LOADED WITH `load(...)`
+
 func TextDocumentHoverFuncWrapper(manager *runtime.Manager) protocol.TextDocumentHoverFunc {
 	return func(context *glsp.Context, params *protocol.HoverParams) (*protocol.Hover, error) {
 		doc, ok := manager.GetDocument(params.TextDocument.URI)
@@ -18,10 +21,6 @@ func TextDocumentHoverFuncWrapper(manager *runtime.Manager) protocol.TextDocumen
 		}
 
 		bytePos := params.Position.IndexIn(doc.TextString)
-		// TODO: bsena; Make hover context-aware, look for:
-		// - Target -> TO do this we would need to build the spec ourself, or use the DAG. See below
-		// - Function
-		// - Argument
 
 		if literal := doc.ExtractCurrentStringLiteral(uint(bytePos)); literal != "" {
 			return createLiteralHover(literal), nil

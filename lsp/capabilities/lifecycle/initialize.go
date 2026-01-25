@@ -45,7 +45,7 @@ func InitializeCallback(manager *runtime.Manager, context *glsp.Context, params 
 	logger.Noticef("Fallback to current dir: %s", v)
 	manager.WorkspaceFolder = v
 
-	// TODO: bsena; look all BUILD files from the root and extract symbols for indexing (go routine?)
+	// TODO: bsena; look all BUILD files from the root and extract symbols for indexing (go routine?)?
 
 	return nil
 }

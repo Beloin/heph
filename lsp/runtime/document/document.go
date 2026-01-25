@@ -86,6 +86,7 @@ func (d *Document) extractLoads() {
 	loads := []string{}
 	for _, call := range d.Calls {
 		if call.Name == builtin.LoadName {
+			// TODO: bsena; What if loads requires a second arg? like load("//path/to/load", "function_loaded")?
 			rawValue := call.Parameters[0].Value
 			loads = append(loads, strings.Trim(rawValue, "\""))
 		}

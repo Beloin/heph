@@ -13,6 +13,9 @@ import (
 
 var logger = commonlog.GetLogger("lifecycle")
 
+// TODO: bsena; DECLARATIONS AND DEFINITIONS SHOULD GO ONLY TO FILES THAT ARE LOADED WITH `load(...)`
+// TODO: bsena; REFERENCES SHOULD SEARCH ONLY TO FILES THAT ARE LOADED WITH `load(...)`
+
 func TextDocumentDeclarationFuncWrapper(manager *runtime.Manager) protocol.TextDocumentDeclarationFunc {
 	// TODO: bsena; I think we need to have a parsed heph tree/graph to know where to go when
 	// mathecd something like //mgmt/go:protos
@@ -53,16 +56,16 @@ func extractLocation(manager *runtime.Manager, uri string, pos *protocol.Positio
 
 		// If its target address, open from current workspace
 		if literal := doc.ExtractCurrentStringLiteral(pos); literal != "" {
-			// Go to target location
+			// Check if its a target location
 			if strings.HasPrefix(literal, "//") {
 
-				// Fallback to default BUILD
+				// Fallback to default BUILD file of that directory
 				literal = strings.Split(literal, ":")[0]
-				literal += "/BUILD"
-				p := path.Join(manager.WorkspaceFolder, literal)
+				literal = path.Join(literal, "BUILD")
+				fullPath := path.Join(manager.WorkspaceFolder, literal)
 
 				return &protocol.Location{
-					URI: addProtocol(p),
+					URI: addProtocol(fullPath),
 					Range: protocol.Range{
 						Start: protocol.Position{
 							Line:      0,
