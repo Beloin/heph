@@ -52,6 +52,7 @@ func NewManager(parser *tree_sitter.Parser) (*Manager, error) {
 // GetDocument queries and look for an existing document in Manager.
 // returns nil if not present
 func (m *Manager) GetDocument(uri protocol.DocumentUri) (*document.Document, bool) {
+	uri = normalizeDocName(uri)
 	if val, ok := m.DocumentMap.Load(uri); ok {
 		tuple := val.(*docTuple)
 		return tuple.Document, true
@@ -61,6 +62,7 @@ func (m *Manager) GetDocument(uri protocol.DocumentUri) (*document.Document, boo
 }
 
 func (m *Manager) NewDocument(name string, tree *tree_sitter.Tree, rawText []byte, version int32) (*document.Document, error) {
+	name = normalizeDocName(name)
 	newDoc, err := document.NewDocument(name, tree, rawText)
 	if err != nil {
 		return nil, err
@@ -122,9 +124,9 @@ func (m *Manager) loadDocumentsFromLoads(doc *document.Document) {
 
 			filePath := path.Join(folderPath, entry.Name())
 
+			normalizedName := normalizeDocName(filePath)
 			// Skip if already loaded
-			if fDoc, found := m.GetDocument(protocol.DocumentUri(filePath)); found {
-				// doc.AddLoadedDoc(fDoc)
+			if fDoc, found := m.GetDocument(protocol.DocumentUri(normalizedName)); found {
 				doc.AddLoadedDoc(fDoc, rawLoad.Loads)
 				continue
 			}
@@ -142,17 +144,16 @@ func (m *Manager) loadDocumentsFromLoads(doc *document.Document) {
 			}
 
 			// Create new document and ignore if there's an error
-			newDoc, err := document.NewDocument(filePath, tree, content)
+			newDoc, err := document.NewDocument(normalizedName, tree, content)
 			if err != nil {
 				tree.Close()
 				continue
 			}
 
 			// Cross ref
-			// doc.AddLoadedDoc(newDoc)
 			doc.AddLoadedDoc(newDoc, rawLoad.Loads)
 
-			m.setDocument(protocol.DocumentUri(filePath), 0, newDoc)
+			m.setDocument(protocol.DocumentUri(normalizedName), 0, newDoc)
 
 			// Recursively load its loads
 			m.loadDocumentsFromLoads(newDoc)
@@ -306,4 +307,10 @@ func (m *Manager) QueryCallsDoc(symbolName string) []callQueryResult {
 	})
 
 	return res
+}
+
+func normalizeDocName(uri string) string {
+	uri = strings.TrimPrefix(uri, "file://")
+
+	return uri
 }

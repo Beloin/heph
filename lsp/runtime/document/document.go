@@ -24,7 +24,7 @@ type Document struct {
 	// Loads are the BUILD path
 	Loads      []*RawLoad // TODO: bsena; Use the graph so we can know where to load thinks
 	DocLoads   []*Load
-	IsLoadedBy []*Load     // TODO: bsena; Use a set instead of array
+	IsLoadedBy []*Load // TODO: bsena; Use a set instead of array
 	// ExportedTargets []*specs.Target // TODO: bsena; We need the DAG from heph
 
 	Tree       *tree_sitter.Tree
