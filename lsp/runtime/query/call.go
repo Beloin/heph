@@ -13,10 +13,6 @@ const callQuery = `
 (call function: (identifier) @call.name . (argument_list (_) @call.arg)? ) @call.stmt
 `
 
-const argQuery = `
-(argument_list (_) @call.arg)?
-`
-
 func QueryCalls(tree *tree_sitter.Tree, text []byte, source string) ([]*symbol.Symbol, error) {
 	if tree.RootNode() == nil {
 		return nil, ErrEmptyTreeError

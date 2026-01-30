@@ -1,4 +1,4 @@
-load("//folder/to/load")
+load("//folder/to/load", "my_func")
 
 print("My Load")
 

@@ -1,0 +1,63 @@
+@startuml LSP TODO Graph
+
+scale 3000 width
+
+package "LSP TODO Collection" {
+    class lsp_todo_list as "TODO List\n(Collection of LSP TODOs)"
+
+    class lsp_todo_parser_upgrade as "Parser Upgrade\n(Switch to Starlark grammar)"
+    class lsp_todo_symbol_indexing as "Symbol Indexing\n(Efficient symbol lookup)"
+    class lsp_todo_document_management as "Document Management\n(Graph for loads)"
+    class lsp_todo_capabilities as "Capabilities\n(Missing LSP features)"
+    class lsp_todo_initialization as "Initialization\n(Load all BUILD files)"
+    class lsp_todo_sync as "Sync Issues\n(Fix sync problems)"
+    class lsp_todo_infrastructure as "Infrastructure\n(Interfaces, logging)"
+    class lsp_todo_query_navigation as "Query Navigation\n(Graph-based resolution)"
+    class lsp_todo_query_star as "Starlark Parser\n(Alternative parsing)"
+    class lsp_todo_docstring as "Docstring Parsing\n(Improve arg parsing)"
+    class lsp_todo_completion_context as "Completion Context\n(Better completion)"
+    class lsp_todo_diagnostic as "Diagnostics\n(Implement diagnostics)"
+    class lsp_todo_build_patterns as "Build Patterns\n(Support more patterns)"
+    class lsp_todo_workspace_rename as "Workspace Rename\n(File rename ops)"
+    class lsp_todo_code_lens as "Code Lens\n(Visual actions)"
+    class lsp_todo_signature_help as "Signature Help\n(Understand triggers)"
+}
+
+lsp_todo_list --> lsp_todo_parser_upgrade : contains
+lsp_todo_list --> lsp_todo_symbol_indexing : contains
+lsp_todo_list --> lsp_todo_document_management : contains
+lsp_todo_list --> lsp_todo_capabilities : contains
+lsp_todo_list --> lsp_todo_initialization : contains
+lsp_todo_list --> lsp_todo_sync : contains
+lsp_todo_list --> lsp_todo_infrastructure : contains
+lsp_todo_list --> lsp_todo_query_navigation : contains
+lsp_todo_list --> lsp_todo_query_star : contains
+lsp_todo_list --> lsp_todo_docstring : contains
+lsp_todo_list --> lsp_todo_completion_context : contains
+lsp_todo_list --> lsp_todo_diagnostic : contains
+lsp_todo_list --> lsp_todo_build_patterns : contains
+lsp_todo_list --> lsp_todo_workspace_rename : contains
+lsp_todo_list --> lsp_todo_code_lens : contains
+lsp_todo_list --> lsp_todo_signature_help : contains
+
+lsp_todo_parser_upgrade --> lsp_todo_symbol_indexing : correlation_of_idea
+lsp_todo_parser_upgrade --> lsp_todo_query_star : correlation_of_idea
+lsp_todo_symbol_indexing --> lsp_todo_query_navigation : helps_solve
+lsp_todo_symbol_indexing --> lsp_todo_capabilities : helps_solve
+lsp_todo_document_management --> lsp_todo_query_navigation : helps_solve
+lsp_todo_document_management --> lsp_todo_capabilities : helps_solve
+lsp_todo_initialization --> lsp_todo_symbol_indexing : helps_solve
+lsp_todo_initialization --> lsp_todo_query_navigation : helps_solve
+lsp_todo_infrastructure --> lsp_todo_sync : implementation_closeness
+lsp_todo_infrastructure --> lsp_todo_capabilities : implementation_closeness
+lsp_todo_query_navigation --> lsp_todo_capabilities : solves_same_problem
+lsp_todo_sync --> lsp_todo_symbol_indexing : helps_solve
+lsp_todo_diagnostic --> lsp_todo_sync : correlation_of_idea
+lsp_todo_completion_context --> lsp_todo_capabilities : correlation_of_idea
+lsp_todo_docstring --> lsp_todo_capabilities : helps_solve
+lsp_todo_build_patterns --> lsp_todo_initialization : helps_solve
+lsp_todo_workspace_rename --> lsp_todo_capabilities : correlation_of_idea
+lsp_todo_code_lens --> lsp_todo_capabilities : correlation_of_idea
+lsp_todo_signature_help --> lsp_todo_capabilities : correlation_of_idea
+
+@enduml

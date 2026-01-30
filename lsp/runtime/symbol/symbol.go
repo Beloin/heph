@@ -39,10 +39,6 @@ type Symbol struct {
 	Name   string
 	Source string
 
-	// TODO: bsena; Test if query.ExtractFunction can read FullyQualifiedName like heph.path.cwd
-	// FullyQualifiedName references the compoosite name from class, function, method etc. names.
-	// For example, `a.b.c.d` would be a full reference name for the symbol `d`.
-	// Is a shortcut to ease queries
 	FullyQualifiedName string
 
 	Kind      SymbolKind

@@ -5,6 +5,7 @@ import (
 	"path"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/hephbuild/heph/lsp/runtime/builtin"
 	"github.com/hephbuild/heph/lsp/runtime/document"
@@ -28,7 +29,7 @@ type docTuple struct {
 // TODO: bsena; Remove protocol usage here, use raw values
 
 type Manager struct {
-	DocumentMap map[protocol.DocumentUri]*docTuple // TODO: bsena; use sync.Map
+	DocumentMap sync.Map
 	TargetMap   map[string]*specs.Target
 
 	BuiltinSymbols []*symbol.Symbol
@@ -45,13 +46,14 @@ func NewManager(parser *tree_sitter.Parser) (*Manager, error) {
 		return nil, err
 	}
 
-	return &Manager{DocumentMap: map[protocol.DocumentUri]*docTuple{}, Parser: parser, BuiltinSymbols: builtins}, nil
+	return &Manager{DocumentMap: sync.Map{}, Parser: parser, BuiltinSymbols: builtins}, nil
 }
 
 // GetDocument queries and look for an existing document in Manager.
 // returns nil if not present
 func (m *Manager) GetDocument(uri protocol.DocumentUri) (*document.Document, bool) {
-	if tuple, found := m.DocumentMap[uri]; found {
+	if val, ok := m.DocumentMap.Load(uri); ok {
+		tuple := val.(*docTuple)
 		return tuple.Document, true
 	}
 
@@ -73,9 +75,28 @@ func (m *Manager) NewDocument(name string, tree *tree_sitter.Tree, rawText []byt
 	return newDoc, nil
 }
 
+func (m *Manager) SwapTree(doc *document.Document, newT *tree_sitter.Tree, newText []byte) (*tree_sitter.Tree, error) {
+	t, err := doc.SwapTree(newT, newText)
+
+	if err != nil {
+		return nil, err
+	}
+
+
+	// TODO: this will be a problem with update in doc loads...
+	// Load all other documents from all doc.Loads
+	// go m.loadDocumentsFromLoads(doc)
+	m.loadDocumentsFromLoads(doc)
+
+	return t, nil
+}
+
+// TODO: bsena; load statement must import at least 1 symbol
+// Probably fix Loads to Load and the function loaded, so we need to get only exported loads
 // loadDocumentsFromLoads loads documents from load paths
 func (m *Manager) loadDocumentsFromLoads(doc *document.Document) {
-	for _, loadPath := range doc.Loads {
+	for _, rawLoad := range doc.Loads {
+		loadPath := rawLoad.Path 
 		if loadPath == "" {
 			continue
 		}
@@ -102,7 +123,9 @@ func (m *Manager) loadDocumentsFromLoads(doc *document.Document) {
 			filePath := path.Join(folderPath, entry.Name())
 
 			// Skip if already loaded
-			if _, found := m.GetDocument(protocol.DocumentUri(filePath)); found {
+			if fDoc, found := m.GetDocument(protocol.DocumentUri(filePath)); found {
+				// doc.AddLoadedDoc(fDoc)
+				doc.AddLoadedDoc(fDoc, rawLoad.Loads)
 				continue
 			}
 
@@ -118,15 +141,18 @@ func (m *Manager) loadDocumentsFromLoads(doc *document.Document) {
 				continue
 			}
 
-			// Create new document
+			// Create new document and ignore if there's an error
 			newDoc, err := document.NewDocument(filePath, tree, content)
 			if err != nil {
 				tree.Close()
 				continue
 			}
 
+			// Cross ref
+			// doc.AddLoadedDoc(newDoc)
+			doc.AddLoadedDoc(newDoc, rawLoad.Loads)
+
 			m.setDocument(protocol.DocumentUri(filePath), 0, newDoc)
-			doc.AddLoadedDoc(newDoc)
 
 			// Recursively load its loads
 			m.loadDocumentsFromLoads(newDoc)
@@ -135,16 +161,17 @@ func (m *Manager) loadDocumentsFromLoads(doc *document.Document) {
 }
 
 func (m *Manager) setDocument(uri protocol.DocumentUri, version protocol.Integer, doc *document.Document) {
-	if tuple, found := m.DocumentMap[uri]; found {
+	if val, ok := m.DocumentMap.Load(uri); ok {
+		tuple := val.(*docTuple)
 		tuple.Document.Close()
 
 		tuple.Document = doc
 		tuple.version = version
 	} else {
-		m.DocumentMap[uri] = &docTuple{
+		m.DocumentMap.Store(uri, &docTuple{
 			Document: doc,
 			version:  version,
-		}
+		})
 	}
 }
 
@@ -152,9 +179,8 @@ type Filter func(s *symbol.Symbol) bool
 
 func (m *Manager) AllLoadedSymbols(filters ...Filter) []*symbol.Symbol {
 	allSymbols := m.BuiltinSymbols
-	for _, doc := range m.DocumentMap {
-		// allSymbols = slices.Concat(allSymbols, doc.Symbols)
-
+	m.DocumentMap.Range(func(key, value interface{}) bool {
+		doc := value.(*docTuple)
 		for _, smb := range doc.Document.Symbols {
 			shoulAdd := true
 			for _, f := range filters {
@@ -168,7 +194,8 @@ func (m *Manager) AllLoadedSymbols(filters ...Filter) []*symbol.Symbol {
 			}
 
 		}
-	}
+		return true
+	})
 
 	return allSymbols
 }
@@ -196,7 +223,8 @@ func (m *Manager) AllLoadedSymbolsPerKind() kindStruct {
 		}
 	}
 
-	for _, doc := range m.DocumentMap {
+	m.DocumentMap.Range(func(key, value any) bool {
+		doc := value.(*docTuple)
 		for _, smb := range doc.Document.Symbols {
 			switch smb.Kind {
 			case symbol.FunctionKind:
@@ -207,7 +235,8 @@ func (m *Manager) AllLoadedSymbolsPerKind() kindStruct {
 				allSymbols = append(allSymbols, smb)
 			}
 		}
-	}
+		return true
+	})
 
 	allSymbols = slices.Concat(allSymbols, vars, funs)
 
@@ -236,13 +265,28 @@ func (m *Manager) Query(symbolName string) (*symbol.Symbol, bool) {
 }
 
 func (m *Manager) QueryDoc(symbolName string) (*document.Document, *symbol.Symbol, bool) {
-	for _, doc := range m.DocumentMap {
+	var foundDoc *document.Document
+	var foundSymbol *symbol.Symbol
+	m.DocumentMap.Range(func(key, value any) bool {
+		doc := value.(*docTuple)
 		if s, found := doc.Document.Query(symbolName); found {
-			return doc.Document, s, true
+			foundDoc = doc.Document
+			foundSymbol = s
+
+			return false
 		}
+
+		return true
+	})
+	if foundDoc != nil {
+		return foundDoc, foundSymbol, true
 	}
 
 	return nil, nil, false
+}
+
+func (m *Manager) QueryBuiltin(symbolName string) (*symbol.Symbol, bool) {
+	return symbol.FindSymbol(m.BuiltinSymbols, symbolName)
 }
 
 type callQueryResult struct {
@@ -252,11 +296,14 @@ type callQueryResult struct {
 
 func (m *Manager) QueryCallsDoc(symbolName string) []callQueryResult {
 	res := []callQueryResult{}
-	for _, doc := range m.DocumentMap {
+	m.DocumentMap.Range(func(key, value any) bool {
+		doc := value.(*docTuple)
 		if calls := doc.Document.QueryCalls(symbolName); len(calls) > 0 {
 			res = append(res, callQueryResult{doc.Document, calls})
 		}
-	}
+
+		return true
+	})
 
 	return res
 }

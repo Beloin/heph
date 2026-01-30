@@ -4,6 +4,7 @@ import (
 	"errors"
 
 	"github.com/hephbuild/heph/lsp/runtime"
+	"github.com/tliron/commonlog"
 	"github.com/tliron/glsp"
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 
@@ -25,6 +26,8 @@ var (
 // protocol.TextDocumentDidSaveFunc
 // protocol.TextDocumentDidCloseFunc           | Mandatory
 
+var logger = commonlog.GetLogger("lifecycle")
+
 func TextDocumentDidOpenWrapper(manager *runtime.Manager) protocol.TextDocumentDidOpenFunc {
 	// TODO: bsena; We are panicking when we read invalid syntax file, why?
 
@@ -39,7 +42,7 @@ func TextDocumentDidOpenWrapper(manager *runtime.Manager) protocol.TextDocumentD
 				return ErrInvalidTree
 			}
 
-			_, err := doc.SwapTree(newTree, bts)
+			_, err := manager.SwapTree(doc, newTree, bts)
 
 			return errors.Join(ErrInvalidTree, err)
 		}
@@ -50,11 +53,13 @@ func TextDocumentDidOpenWrapper(manager *runtime.Manager) protocol.TextDocumentD
 		}
 
 		version := params.TextDocument.Version
-		_, err := manager.NewDocument(params.TextDocument.URI, newTree, bts, version)
+		d, err := manager.NewDocument(params.TextDocument.URI, newTree, bts, version)
 		if err != nil {
 			newTree.Close()
 			return ErrInvalidTree
 		}
+
+		logger.Noticef("Doc (%s): Loads %#v IsLoaded: %#v", d.FullPath, d.DocLoads, d.IsLoadedBy)
 
 		return nil
 	}
@@ -100,23 +105,25 @@ func TextDocumentDidChangeFuncWrapper(manager *runtime.Manager) protocol.TextDoc
 				newText := ParseNewBytes(doc.Text, insertBytes, startByteOffset, endByteOffset)
 				newTree := parser.Parse(newText, doc.Tree)
 
-				_, err := doc.SwapTree(newTree, newText)
+				_, err := manager.SwapTree(doc, newTree, newText)
 				if err != nil {
 					return errors.Join(ErrInvalidTree, err)
 				}
 
+				logger.Noticef("Doc (%s): Loads %#v IsLoaded: %#v", doc.FullPath, doc.DocLoads, doc.IsLoadedBy)
 			}
 
 			if event, ok := change.(protocol.TextDocumentContentChangeEventWhole); ok {
 				bts := []byte(event.Text)
 				newTree := parser.Parse(bts, nil)
 
-				_, err := doc.SwapTree(newTree, bts)
+				_, err := manager.SwapTree(doc, newTree, bts)
 				if err != nil {
 					newTree.Close()
 					return errors.Join(ErrInvalidTree, err)
 				}
 
+				logger.Noticef("Doc (%s): Loads %#v IsLoaded: %#v", doc.FullPath, doc.DocLoads, doc.IsLoadedBy)
 			}
 		}
 

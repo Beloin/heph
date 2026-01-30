@@ -2,6 +2,7 @@ package lang
 
 import (
 	"github.com/hephbuild/heph/lsp/runtime"
+	"github.com/hephbuild/heph/lsp/runtime/document"
 	"github.com/hephbuild/heph/lsp/runtime/symbol"
 	"github.com/tliron/commonlog"
 	"github.com/tliron/glsp"
@@ -41,12 +42,12 @@ func TextDocumentCompletionFuncWrapper(manager *runtime.Manager) protocol.TextDo
 			}
 
 			// Complete symbols that are loaded by "load"
-			for _, loadedDoc := range doc.DocLoads {
-				for _, s := range loadedDoc.Symbols {
-					compItem := createCompletionItem(s)
+			doc.RangeDocLoads(func(load *document.Load) {
+				if sym, found := load.Doc.Query(load.Loads); found {
+					compItem := createCompletionItem(sym)
 					completionItems = append(completionItems, compItem)
 				}
-			}
+			})
 
 			return completionItems, nil
 		}

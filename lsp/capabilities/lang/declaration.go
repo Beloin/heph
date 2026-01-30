@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/hephbuild/heph/lsp/runtime"
+	"github.com/hephbuild/heph/lsp/runtime/document"
 	"github.com/hephbuild/heph/lsp/runtime/symbol"
 	"github.com/tliron/commonlog"
 	"github.com/tliron/glsp"
@@ -17,12 +18,6 @@ var logger = commonlog.GetLogger("lifecycle")
 // TODO: bsena; REFERENCES SHOULD SEARCH ONLY TO FILES THAT ARE LOADED WITH `load(...)`
 
 func TextDocumentDeclarationFuncWrapper(manager *runtime.Manager) protocol.TextDocumentDeclarationFunc {
-	// TODO: bsena; I think we need to have a parsed heph tree/graph to know where to go when
-	// mathecd something like //mgmt/go:protos
-	// It can be from a string, from a `load` and so on
-	// Probably something from package.Package
-	// Or we parse the targets ourself
-
 	return func(context *glsp.Context, params *protocol.DeclarationParams) (any, error) {
 		if location, found := extractLocation(manager, params.TextDocument.URI, &params.Position); found {
 			logger.Noticef("Declaration location: %v", location)
@@ -34,12 +29,6 @@ func TextDocumentDeclarationFuncWrapper(manager *runtime.Manager) protocol.TextD
 }
 
 func TextDocumentDefinitionFuncWrapper(manager *runtime.Manager) protocol.TextDocumentDefinitionFunc {
-	// TODO: bsena; I think we need to have a parsed heph tree/graph to know where to go when
-	// mathecd something like //mgmt/go:protos
-	// It can be from a string, from a `load` and so on
-	// Probably something from package.Package
-	// Or we parse the targets ourself
-
 	return func(context *glsp.Context, params *protocol.DefinitionParams) (any, error) {
 		if location, found := extractLocation(manager, params.TextDocument.URI, &params.Position); found {
 			logger.Noticef("Declaration location: %v", location)
@@ -81,31 +70,60 @@ func extractLocation(manager *runtime.Manager, uri string, pos *protocol.Positio
 		}
 
 		if symbolName := doc.ExtractCurrentSymbolName(pos); symbolName != "" {
-			// First check loaded documents
-			for _, loadedDoc := range doc.DocLoads {
-				if sym, found := loadedDoc.Query(symbolName); found {
-					return buildLocationFromSymbol(loadedDoc.FullPath, sym), true
-				}
+			// Current doc
+			if sym, found := doc.Query(symbolName); found {
+				return buildLocationFromSymbol(doc.FullPath, sym), true
 			}
 
-			// Fallback to all documents
-			if doc, sym, found := manager.QueryDoc(symbolName); found {
-				return buildLocationFromSymbol(doc.FullPath, sym), true
+			// Loaded docs
+			var loc *protocol.Location
+			var symbolFound bool
+			// doc.RangeDocLoads(func(loadedDoc *document.Document) {
+			// 	if !symbolFound {
+			// 		if sym, found := loadedDoc.Query(symbolName); found {
+			// 			loc = buildLocationFromSymbol(loadedDoc.FullPath, sym)
+			// 			symbolFound = true
+			// 		}
+			// 	}
+			// })
+
+			// Location symbols that are loaded by "load"
+			doc.RangeDocLoads(func(load *document.Load) {
+				if !symbolFound {
+					doc := load.Doc
+					if sym, found := doc.Query(load.Loads); found {
+						loc = buildLocationFromSymbol(doc.FullPath, sym)
+						symbolFound = true
+					}
+				}
+			})
+
+			if symbolFound {
+				return loc, true
 			}
 		}
 
 		if symbolName := doc.ExtractCurrentFunctionName(pos); symbolName != "" {
-			// First check loaded documents
-			for _, loadedDoc := range doc.DocLoads {
-				logger.Noticef("Found function name: %s", symbolName)
-				if sym, found := loadedDoc.Query(symbolName); found {
-					return buildLocationFromSymbol(loadedDoc.FullPath, sym), true
-				}
+			// Current doc
+			if sym, found := doc.Query(symbolName); found {
+				return buildLocationFromSymbol(doc.FullPath, sym), true
 			}
 
-			// Fallback to all documents
-			if doc, sym, found := manager.QueryDoc(symbolName); found {
-				return buildLocationFromSymbol(doc.FullPath, sym), true
+			// Loaded docs
+			var loc *protocol.Location
+			var symbolFound bool
+			doc.RangeDocLoads(func(load *document.Load) {
+				if !symbolFound {
+					doc := load.Doc
+					if sym, found := doc.Query(symbolName); found {
+						loc = buildLocationFromSymbol(doc.FullPath, sym)
+						symbolFound = true
+					}
+				}
+			})
+
+			if symbolFound {
+				return loc, true
 			}
 		}
 	}

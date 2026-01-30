@@ -3,6 +3,7 @@ package document
 import (
 	"strings"
 	"sync"
+	"unsafe"
 
 	"github.com/hephbuild/heph/lsp/runtime/builtin"
 	"github.com/hephbuild/heph/lsp/runtime/query"
@@ -10,22 +11,57 @@ import (
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 )
 
+// TODO: bsena; locks here are weird, fix it later
+
 type Document struct {
 	// FullPath
 	FullPath string
 
 	// TODO: bsena; Maybe a tree would be better here
-	Symbols  []*symbol.Symbol // TODO: bsena; find a way to index this
-	Calls    []*symbol.Symbol
-	Loads    []string // TODO: bsena; Use the graph so we can know where to load thinks
-	DocLoads []*Document
+	Symbols []*symbol.Symbol // TODO: bsena; find a way to index this
+	Calls   []*symbol.Symbol
+
+	// Loads are the BUILD path
+	Loads      []*RawLoad // TODO: bsena; Use the graph so we can know where to load thinks
+	DocLoads   []*Load
+	IsLoadedBy []*Load     // TODO: bsena; Use a set instead of array
 	// ExportedTargets []*specs.Target // TODO: bsena; We need the DAG from heph
 
 	Tree       *tree_sitter.Tree
 	Text       []byte // UTF-16 encoded byte array https://microsoft.github.io/language-server-protocol/specifications/specification-3-16/#textDocuments
 	TextString string // UTF-16 encoded string https://microsoft.github.io/language-server-protocol/specifications/specification-3-16/#textDocuments
 
-	m sync.Mutex
+	m       sync.Mutex
+	loadsMu sync.RWMutex
+}
+
+// TODO: bsena; accept multiple loads
+type RawLoad struct {
+	Path  string
+	Loads string
+}
+
+type Load struct {
+	Doc   *Document
+	Loads string
+}
+
+// TODO: bsena; ugly, but keep the caller to undestading how call the locks
+func lockTwoLoads(mu1, mu2 *sync.RWMutex) {
+	p1 := uintptr(unsafe.Pointer(mu1))
+	p2 := uintptr(unsafe.Pointer(mu2))
+	if p1 < p2 {
+		mu1.Lock()
+		mu2.Lock()
+	} else {
+		mu2.Lock()
+		mu1.Lock()
+	}
+}
+
+func unlockTwoLoads(mu1, mu2 *sync.RWMutex) {
+	mu1.Unlock()
+	mu2.Unlock()
 }
 
 func (d *Document) Close() {
@@ -39,7 +75,7 @@ func NewDocument(name string, tree *tree_sitter.Tree, rawText []byte) (*Document
 	syms, calls, err := extractSymbols(doc.Tree, doc.Text, doc.FullPath)
 	doc.Symbols = syms
 	doc.Calls = calls
-	doc.extractLoads() // TODO: bsena; find a way to do this whitin the same method
+	doc.extractLoads()
 
 	return doc, err
 }
@@ -61,7 +97,10 @@ func (d *Document) SwapTree(newT *tree_sitter.Tree, newText []byte) (*tree_sitte
 	d.Tree = newT
 	d.Text = newText
 	d.TextString = string(newText)
-	d.extractLoads() // TODO: bsena; find a way to do this whitin the same method
+
+	d.ResetLoads()
+	d.extractLoads()
+
 	oldTree.Close()
 
 	return oldTree, err
@@ -83,12 +122,18 @@ func extractSymbols(tree *tree_sitter.Tree, text []byte, source string) ([]*symb
 }
 
 func (d *Document) extractLoads() {
-	loads := []string{}
+	loads := []*RawLoad{}
 	for _, call := range d.Calls {
 		if call.Name == builtin.LoadName {
-			// TODO: bsena; What if loads requires a second arg? like load("//path/to/load", "function_loaded")?
+			if len(call.Parameters) < 2 {
+				continue
+			}
+
 			rawValue := call.Parameters[0].Value
-			loads = append(loads, strings.Trim(rawValue, "\""))
+			rawFunction := call.Parameters[1].Value
+			path := strings.Trim(rawValue, "\"")
+			fun := strings.Trim(rawFunction, "\"")
+			loads = append(loads, &RawLoad{Path: path, Loads: fun})
 		}
 	}
 
@@ -120,6 +165,86 @@ func (d *Document) QueryCalls(symbolName string) []*symbol.Symbol {
 	return symbol.FindCalls(d.Calls, symbolName)
 }
 
-func (d *Document) AddLoadedDoc(doc *Document) {
-	d.DocLoads = append(d.DocLoads, doc)
+func (d *Document) RangeDocLoads(fn func(*Load)) {
+	d.loadsMu.RLock()
+	defer d.loadsMu.RUnlock()
+	for _, doc := range d.DocLoads {
+		fn(doc)
+	}
+}
+
+func (d *Document) RangeIsLoadedBy(fn func(*Load)) {
+	d.loadsMu.RLock()
+	defer d.loadsMu.RUnlock()
+	for _, doc := range d.IsLoadedBy {
+		fn(doc)
+	}
+}
+
+func (d *Document) ResetLoads() {
+	// Copy to remove from LoadedBy
+	d.loadsMu.RLock()
+	docs := make([]*Load, len(d.DocLoads))
+	copy(docs, d.DocLoads)
+	d.loadsMu.RUnlock()
+
+	for _, load := range docs {
+		doc := load.Doc
+		doc.RemoveLoadedByDoc(d)
+	}
+
+	d.loadsMu.Lock()
+	d.DocLoads = nil
+	d.loadsMu.Unlock()
+}
+
+func (d *Document) AddLoadedDoc(doc *Document, loads string) {
+	// Locks both documents
+	lockTwoLoads(&d.loadsMu, &doc.loadsMu)
+
+	d.DocLoads = append(d.DocLoads, &Load{Doc: doc, Loads: loads})
+	doc.IsLoadedBy = append(doc.IsLoadedBy, &Load{Doc: d, Loads: loads})
+
+	unlockTwoLoads(&d.loadsMu, &doc.loadsMu)
+}
+
+func (d *Document) RemoveLoadedDoc(doc *Document) {
+	lockTwoLoads(&d.loadsMu, &doc.loadsMu)
+
+	// remove from d.DocLoads
+	for i, load := range d.DocLoads {
+		if load.Doc == doc {
+			last := len(d.DocLoads) - 1
+			d.DocLoads[i] = d.DocLoads[last]
+			d.DocLoads = d.DocLoads[:last]
+			break
+		}
+	}
+
+	// remove from doc.IsLoadedBy
+	for i, load := range doc.IsLoadedBy {
+		if load.Doc == d {
+			last := len(doc.IsLoadedBy) - 1
+			doc.IsLoadedBy[i] = doc.IsLoadedBy[last]
+			doc.IsLoadedBy = doc.IsLoadedBy[:last]
+			break
+		}
+	}
+
+	unlockTwoLoads(&d.loadsMu, &doc.loadsMu)
+}
+
+func (d *Document) RemoveLoadedByDoc(doc *Document) {
+	doc.loadsMu.Lock()
+
+	for i, loader := range doc.IsLoadedBy {
+		if loader.Doc == d {
+			last := len(doc.IsLoadedBy) - 1
+			doc.IsLoadedBy[i] = doc.IsLoadedBy[last]
+			doc.IsLoadedBy = doc.IsLoadedBy[:last]
+			break
+		}
+	}
+
+	doc.loadsMu.Unlock()
 }

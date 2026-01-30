@@ -64,9 +64,11 @@ func (suite *CallQuerySuite) TestFunctionCallParameters() {
 	// Test load function parameters
 	loadSymbol, ok := symbolMap["load"]
 	suite.Require().True(ok, "load function should be found")
-	suite.Require().Len(loadSymbol.Parameters, 1, "load should have 1 parameter")
+	suite.Require().Len(loadSymbol.Parameters, 2, "load should have 2 parameter")
 	suite.Require().Equal("0", loadSymbol.Parameters[0].Name, "first parameter should be named '0'")
 	suite.Require().Equal("\"//folder/to/load\"", loadSymbol.Parameters[0].Value, "load parameter should have correct value")
+	suite.Require().Equal("1", loadSymbol.Parameters[1].Name, "first parameter should be named '1'")
+	suite.Require().Equal("\"my_func\"", loadSymbol.Parameters[1].Value, "load parameter should have correct value")
 
 	// Test print function parameters
 	printSymbol, ok := symbolMap["print"]
