@@ -111,8 +111,14 @@ func (m *Manager) loadDocumentsFromLoads(doc *document.Document) {
 			filePath := path.Join(folderPath, entry.Name())
 
 			normalizedName := normalizeDocName(filePath)
+
+			// If tries to load itself
+			if normalizedName == doc.FullPath {
+				continue
+			}
+
 			// Skip if already loaded
-			if fDoc, found := m.GetDocument(string(normalizedName)); found {
+			if fDoc, found := m.GetDocument(normalizedName); found {
 				doc.AddLoadedDoc(fDoc, rawLoad.Loads)
 				continue
 			}
@@ -139,7 +145,7 @@ func (m *Manager) loadDocumentsFromLoads(doc *document.Document) {
 			// Cross ref
 			doc.AddLoadedDoc(newDoc, rawLoad.Loads)
 
-			m.setDocument(string(normalizedName), 0, newDoc)
+			m.setDocument(normalizedName, 0, newDoc)
 
 			// Recursively load its loads
 			m.loadDocumentsFromLoads(newDoc)

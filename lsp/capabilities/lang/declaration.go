@@ -75,20 +75,12 @@ func extractLocation(manager *runtime.Manager, uri string, pos *protocol.Positio
 			// Loaded docs
 			var loc *protocol.Location
 			var symbolFound bool
-			// doc.RangeDocLoads(func(loadedDoc *document.Document) {
-			// 	if !symbolFound {
-			// 		if sym, found := loadedDoc.Query(symbolName); found {
-			// 			loc = buildLocationFromSymbol(loadedDoc.FullPath, sym)
-			// 			symbolFound = true
-			// 		}
-			// 	}
-			// })
 
 			// Location symbols that are loaded by "load"
 			doc.RangeDocLoads(func(load *document.Load) {
 				if !symbolFound {
 					doc := load.Doc
-					if sym, found := doc.Query(load.Loads); found {
+					if sym, found := doc.Query(symbolName); found {
 						loc = buildLocationFromSymbol(doc.FullPath, sym)
 						symbolFound = true
 					}

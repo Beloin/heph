@@ -37,9 +37,12 @@ func TextDocumentCompletionFuncWrapper(manager *runtime.Manager) protocol.TextDo
 
 			// Complete symbols that are loaded by "load"
 			doc.RangeDocLoads(func(load *document.Load) {
-				if sym, found := load.Doc.Query(load.Loads); found {
-					compItem := createCompletionItem(sym)
-					completionItems = append(completionItems, compItem)
+				loadDoc := load.Doc
+				if syms := loadDoc.QueryAll(load.Loads); len(syms) > 0 {
+					for _, sym := range syms {
+						compItem := createCompletionItem(sym)
+						completionItems = append(completionItems, compItem)
+					}
 				}
 			})
 

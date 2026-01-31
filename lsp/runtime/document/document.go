@@ -22,8 +22,8 @@ type Document struct {
 	// if any file has it name changed or delete,
 	// Loads are not updated until next file sync, so use DocLoads
 	Loads      []*RawLoad
-	DocLoads   []*Load
-	IsLoadedBy []*Load
+	DocLoads   map[string]*Load
+	IsLoadedBy map[string]*Load
 
 	Tree       *tree_sitter.Tree
 	Text       []byte // UTF-16 encoded byte array https://microsoft.github.io/language-server-protocol/specifications/specification-3-16/#textDocuments
@@ -33,15 +33,18 @@ type Document struct {
 	loadsMu   sync.RWMutex
 }
 
-// TODO: bsena; accept multiple loads
 type RawLoad struct {
 	Path  string
-	Loads string
+	Loads []string
 }
 
 type Load struct {
 	Doc   *Document
-	Loads string
+	Loads []string
+}
+
+func (l *Load) Hash() string {
+	return l.Doc.FullPath + "|" + strings.Join(l.Loads, "|")
 }
 
 // lockTwoLoads locks both docs mutexes in a deterministic way. Ugly, but keep the caller from undestading how call the locks
@@ -67,7 +70,10 @@ func (d *Document) Close() {
 }
 
 func NewDocument(name string, tree *tree_sitter.Tree, rawText []byte) (*Document, error) {
-	doc := &Document{FullPath: name, Tree: tree, Text: rawText, TextString: string(rawText)}
+	doc := &Document{
+		FullPath: name, Tree: tree, Text: rawText, TextString: string(rawText),
+		DocLoads: make(map[string]*Load), IsLoadedBy: make(map[string]*Load),
+	}
 
 	syms, calls, err := extractSymbols(doc.Tree, doc.Text, doc.FullPath)
 	doc.Symbols = syms
@@ -123,10 +129,14 @@ func (d *Document) extractLoads() {
 			}
 
 			rawValue := call.Parameters[0].Value
-			rawFunction := call.Parameters[1].Value
 			path := strings.Trim(rawValue, "\"")
-			fun := strings.Trim(rawFunction, "\"")
-			loads = append(loads, &RawLoad{Path: path, Loads: fun})
+			loadsSlice := []string{}
+			for i := 1; i < len(call.Parameters); i++ {
+				rawFunction := call.Parameters[i].Value
+				fun := strings.Trim(rawFunction, "\"")
+				loadsSlice = append(loadsSlice, fun)
+			}
+			loads = append(loads, &RawLoad{Path: path, Loads: loadsSlice})
 		}
 	}
 
@@ -154,6 +164,14 @@ func (d *Document) Query(symbolName string) (*symbol.Symbol, bool) {
 	return symbol.FindSymbol(d.Symbols, symbolName)
 }
 
+func (d *Document) QueryMany(symbolName []string) (*symbol.Symbol, bool) {
+	return symbol.FindManySymbol(d.Symbols, symbolName)
+}
+
+func (d *Document) QueryAll(symbolName []string) []*symbol.Symbol {
+	return symbol.FindManySymbols(d.Symbols, symbolName)
+}
+
 func (d *Document) QueryCalls(symbolName string) []*symbol.Symbol {
 	return symbol.FindCalls(d.Calls, symbolName)
 }
@@ -177,8 +195,10 @@ func (d *Document) RangeIsLoadedBy(fn func(*Load)) {
 func (d *Document) resetLoads() {
 	// Copy to remove from LoadedBy
 	d.loadsMu.RLock()
-	docs := make([]*Load, len(d.DocLoads))
-	copy(docs, d.DocLoads)
+	docs := make([]*Load, 0, len(d.DocLoads))
+	for _, load := range d.DocLoads {
+		docs = append(docs, load)
+	}
 	d.loadsMu.RUnlock()
 
 	for _, load := range docs {
@@ -187,16 +207,19 @@ func (d *Document) resetLoads() {
 	}
 
 	d.loadsMu.Lock()
-	d.DocLoads = nil
+	d.DocLoads = make(map[string]*Load)
 	d.loadsMu.Unlock()
 }
 
-func (d *Document) AddLoadedDoc(doc *Document, loads string) {
+func (d *Document) AddLoadedDoc(doc *Document, loads []string) {
 	// Locks both documents
 	lockTwoLoads(&d.loadsMu, &doc.loadsMu)
 
-	d.DocLoads = append(d.DocLoads, &Load{Doc: doc, Loads: loads})
-	doc.IsLoadedBy = append(doc.IsLoadedBy, &Load{Doc: d, Loads: loads})
+	dl := &Load{Doc: doc, Loads: loads}
+	d.DocLoads[dl.Hash()] = dl
+
+	dlby := &Load{Doc: d, Loads: loads}
+	doc.IsLoadedBy[dlby.Hash()] = dlby
 
 	unlockTwoLoads(&d.loadsMu, &doc.loadsMu)
 }
@@ -205,21 +228,17 @@ func (d *Document) RemoveLoadedDoc(doc *Document) {
 	lockTwoLoads(&d.loadsMu, &doc.loadsMu)
 
 	// remove from d.DocLoads
-	for i, load := range d.DocLoads {
+	for key, load := range d.DocLoads {
 		if load.Doc == doc {
-			last := len(d.DocLoads) - 1
-			d.DocLoads[i] = d.DocLoads[last]
-			d.DocLoads = d.DocLoads[:last]
+			delete(d.DocLoads, key)
 			break
 		}
 	}
 
 	// remove from doc.IsLoadedBy
-	for i, load := range doc.IsLoadedBy {
+	for key, load := range doc.IsLoadedBy {
 		if load.Doc == d {
-			last := len(doc.IsLoadedBy) - 1
-			doc.IsLoadedBy[i] = doc.IsLoadedBy[last]
-			doc.IsLoadedBy = doc.IsLoadedBy[:last]
+			delete(doc.IsLoadedBy, key)
 			break
 		}
 	}
@@ -230,11 +249,9 @@ func (d *Document) RemoveLoadedDoc(doc *Document) {
 func (d *Document) RemoveLoadedByDoc(doc *Document) {
 	doc.loadsMu.Lock()
 
-	for i, loader := range doc.IsLoadedBy {
+	for key, loader := range doc.IsLoadedBy {
 		if loader.Doc == d {
-			last := len(doc.IsLoadedBy) - 1
-			doc.IsLoadedBy[i] = doc.IsLoadedBy[last]
-			doc.IsLoadedBy = doc.IsLoadedBy[:last]
+			delete(doc.IsLoadedBy, key)
 			break
 		}
 	}
