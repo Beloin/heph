@@ -14,9 +14,6 @@ import (
 
 var logger = commonlog.GetLogger("lifecycle")
 
-// TODO: bsena; DECLARATIONS AND DEFINITIONS SHOULD GO ONLY TO FILES THAT ARE LOADED WITH `load(...)`
-// TODO: bsena; REFERENCES SHOULD SEARCH ONLY TO FILES THAT ARE LOADED WITH `load(...)`
-
 func TextDocumentDeclarationFuncWrapper(manager *runtime.Manager) protocol.TextDocumentDeclarationFunc {
 	return func(context *glsp.Context, params *protocol.DeclarationParams) (any, error) {
 		if location, found := extractLocation(manager, params.TextDocument.URI, &params.Position); found {
@@ -48,7 +45,7 @@ func extractLocation(manager *runtime.Manager, uri string, pos *protocol.Positio
 			// Check if its a target location
 			if strings.HasPrefix(literal, "//") {
 
-				// Fallback to default BUILD file of that directory
+				// Fallback to default BUILD file of that directory since we don't know where that heph can be
 				literal = strings.Split(literal, ":")[0]
 				literal = path.Join(literal, "BUILD")
 				fullPath := path.Join(manager.WorkspaceFolder, literal)

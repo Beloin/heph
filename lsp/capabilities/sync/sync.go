@@ -4,14 +4,12 @@ import (
 	"errors"
 
 	"github.com/hephbuild/heph/lsp/runtime"
-	"github.com/tliron/commonlog"
 	"github.com/tliron/glsp"
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
-// Following LSP Spec
 // https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocument_synchronization
 
 var (
@@ -19,17 +17,7 @@ var (
 	ErrInvalidDoc  = errors.New("invalid doc")
 )
 
-// protocol.TextDocumentDidOpenFunc            | Mandatory
-// protocol.TextDocumentDidChangeFunc          | Mandatory
-// protocol.TextDocumentWillSaveFunc
-// protocol.TextDocumentWillSaveWaitUntilFunc
-// protocol.TextDocumentDidSaveFunc
-// protocol.TextDocumentDidCloseFunc           | Mandatory
-
-var logger = commonlog.GetLogger("lifecycle")
-
 func TextDocumentDidOpenWrapper(manager *runtime.Manager) protocol.TextDocumentDidOpenFunc {
-	// TODO: bsena; We are panicking when we read invalid syntax file, why?
 
 	return func(context *glsp.Context, params *protocol.DidOpenTextDocumentParams) error {
 		parser := manager.Parser
@@ -53,13 +41,12 @@ func TextDocumentDidOpenWrapper(manager *runtime.Manager) protocol.TextDocumentD
 		}
 
 		version := params.TextDocument.Version
-		d, err := manager.NewDocument(params.TextDocument.URI, newTree, bts, version)
+		_, err := manager.NewDocument(params.TextDocument.URI, newTree, bts, version)
 		if err != nil {
 			newTree.Close()
 			return ErrInvalidTree
 		}
 
-		logger.Noticef("Doc (%s): Loads %#v IsLoaded: %#v", d.FullPath, d.DocLoads, d.IsLoadedBy)
 
 		return nil
 	}
@@ -97,7 +84,7 @@ func TextDocumentDidChangeFuncWrapper(manager *runtime.Manager) protocol.TextDoc
 					},
 					NewEndPosition: tree_sitter.Point{
 						Row:    uint(event.Range.End.Line),
-						Column: endByte * 2, // TODO: bsena; this is wrong?
+						Column: endByte * 2,
 					},
 				}
 
@@ -109,8 +96,6 @@ func TextDocumentDidChangeFuncWrapper(manager *runtime.Manager) protocol.TextDoc
 				if err != nil {
 					return errors.Join(ErrInvalidTree, err)
 				}
-
-				logger.Noticef("Doc (%s): Loads %#v IsLoaded: %#v", doc.FullPath, doc.DocLoads, doc.IsLoadedBy)
 			}
 
 			if event, ok := change.(protocol.TextDocumentContentChangeEventWhole); ok {
@@ -122,8 +107,6 @@ func TextDocumentDidChangeFuncWrapper(manager *runtime.Manager) protocol.TextDoc
 					newTree.Close()
 					return errors.Join(ErrInvalidTree, err)
 				}
-
-				logger.Noticef("Doc (%s): Loads %#v IsLoaded: %#v", doc.FullPath, doc.DocLoads, doc.IsLoadedBy)
 			}
 		}
 
@@ -161,13 +144,9 @@ func ParseNewBytes(current, insert []byte, offsetStart, offsetEnd int) []byte {
 	for i := 0; i < newLen; i++ {
 		if i >= offsetStart {
 			// Replace
-			// TODO: bsena; test this
 			if i < offsetEnd {
-				// newSlice[i] = insert[insertIndex]
-				// insertIndex++
 				currentIndex++
 
-				// continue
 			}
 
 			// Insert

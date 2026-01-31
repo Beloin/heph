@@ -61,8 +61,11 @@ def group(
     pass
 
 
-def load(name: str):
+def load(name: str, *funs: str):
     """
-    Loads Heph script from path
+    Loads Heph script from path. Need to load at least one function.
+    Args:
+        name (str): Heph BUILD path without file
+        funs (str): List of functions loaded
     """
     pass

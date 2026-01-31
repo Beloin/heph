@@ -11,21 +11,15 @@ import (
 
 var Logger = commonlog.GetLogger("completion")
 
-// TODO: bsena; Implement protocol.CompletionItemResolveFunc
-
 func TextDocumentCompletionFuncWrapper(manager *runtime.Manager) protocol.TextDocumentCompletionFunc {
 	return func(context *glsp.Context, params *protocol.CompletionParams) (any, error) {
-		// TODO: bsena; put the first from this uri
 		var completionItems []protocol.CompletionItem
 
-		// TODO: bsena; ~Read based in position so we can get classes' methods~
-		// We actually are not going to do that, we will extract custom builtins based in hbuiltin
-
-		// If is function we can get args completion
 		if doc, found := manager.GetDocument(params.TextDocument.URI); found {
 			byteOffset := params.Position.IndexIn(doc.TextString)
-			funName := doc.ExtractCurrentFunctionName(uint(byteOffset))
 
+			// If is function we can get args completion
+			funName := doc.ExtractCurrentFunctionName(uint(byteOffset))
 			if s, found := manager.Query(funName); found {
 				if s.Is(symbol.FunctionKind) {
 					args := s.Parameters
@@ -49,10 +43,10 @@ func TextDocumentCompletionFuncWrapper(manager *runtime.Manager) protocol.TextDo
 				}
 			})
 
-			return completionItems, nil
 		}
 
-		allPerKind := manager.AllLoadedSymbols()
+		// Load Builtin
+		allPerKind := manager.BuiltinSymbols
 		for _, symbol := range allPerKind {
 			compItem := createCompletionItem(symbol)
 			completionItems = append(completionItems, compItem)
@@ -66,7 +60,7 @@ func createCompletionItem(symbol *symbol.Symbol) protocol.CompletionItem {
 	name := symbol.Name
 	sig := symbol.Signature
 	doc := symbol.DocString
-	kind := MachineKindToCompletionKind(symbol.Kind)
+	kind := SymbolKindToCompletionKind(symbol.Kind)
 
 	compItem := protocol.CompletionItem{
 		Label:         name,

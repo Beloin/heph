@@ -15,7 +15,6 @@ import (
 //go:embed testdata/test_document.py
 var pythonTestFile []byte
 
-// TODO: bsena; Validate this tests
 type DocumentTestSuite struct {
 	suite.Suite
 }

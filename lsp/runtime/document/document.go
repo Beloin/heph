@@ -11,28 +11,26 @@ import (
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 )
 
-// TODO: bsena; locks here are weird, fix it later
-
 type Document struct {
 	// FullPath
 	FullPath string
 
-	// TODO: bsena; Maybe a tree would be better here
-	Symbols []*symbol.Symbol // TODO: bsena; find a way to index this
+	Symbols []*symbol.Symbol
 	Calls   []*symbol.Symbol
 
-	// Loads are the BUILD path
-	Loads      []*RawLoad // TODO: bsena; Use the graph so we can know where to load thinks
+	// Loads are the BUILD path,
+	// if any file has it name changed or delete,
+	// Loads are not updated until next file sync, so use DocLoads
+	Loads      []*RawLoad
 	DocLoads   []*Load
-	IsLoadedBy []*Load // TODO: bsena; Use a set instead of array
-	// ExportedTargets []*specs.Target // TODO: bsena; We need the DAG from heph
+	IsLoadedBy []*Load
 
 	Tree       *tree_sitter.Tree
 	Text       []byte // UTF-16 encoded byte array https://microsoft.github.io/language-server-protocol/specifications/specification-3-16/#textDocuments
 	TextString string // UTF-16 encoded string https://microsoft.github.io/language-server-protocol/specifications/specification-3-16/#textDocuments
 
-	m       sync.Mutex
-	loadsMu sync.RWMutex
+	treeMutex sync.Mutex
+	loadsMu   sync.RWMutex
 }
 
 // TODO: bsena; accept multiple loads
@@ -46,7 +44,7 @@ type Load struct {
 	Loads string
 }
 
-// TODO: bsena; ugly, but keep the caller to undestading how call the locks
+// lockTwoLoads locks both docs mutexes in a deterministic way. Ugly, but keep the caller from undestading how call the locks
 func lockTwoLoads(mu1, mu2 *sync.RWMutex) {
 	p1 := uintptr(unsafe.Pointer(mu1))
 	p2 := uintptr(unsafe.Pointer(mu2))
@@ -71,7 +69,6 @@ func (d *Document) Close() {
 func NewDocument(name string, tree *tree_sitter.Tree, rawText []byte) (*Document, error) {
 	doc := &Document{FullPath: name, Tree: tree, Text: rawText, TextString: string(rawText)}
 
-	// TODO: bsena; Extract target names here, look for something like target(name="...")
 	syms, calls, err := extractSymbols(doc.Tree, doc.Text, doc.FullPath)
 	doc.Symbols = syms
 	doc.Calls = calls
@@ -82,8 +79,8 @@ func NewDocument(name string, tree *tree_sitter.Tree, rawText []byte) (*Document
 
 // SwapTree atomic swaps current tree and return the closed old tree
 func (d *Document) SwapTree(newT *tree_sitter.Tree, newText []byte) (*tree_sitter.Tree, error) {
-	d.m.Lock()
-	defer d.m.Unlock()
+	d.treeMutex.Lock()
+	defer d.treeMutex.Unlock()
 
 	oldTree := d.Tree
 
@@ -98,7 +95,7 @@ func (d *Document) SwapTree(newT *tree_sitter.Tree, newText []byte) (*tree_sitte
 	d.Text = newText
 	d.TextString = string(newText)
 
-	d.ResetLoads()
+	d.resetLoads()
 	d.extractLoads()
 
 	oldTree.Close()
@@ -106,10 +103,6 @@ func (d *Document) SwapTree(newT *tree_sitter.Tree, newText []byte) (*tree_sitte
 	return oldTree, err
 }
 
-// TODO: bsena; also extract targets here?
-// So we can have a custom symbol that is a spec.Target?
-// extractSymbols reads all symbols from document
-// returns document symbols, document calls and error
 func extractSymbols(tree *tree_sitter.Tree, text []byte, source string) ([]*symbol.Symbol, []*symbol.Symbol, error) {
 	symbols, err := query.QuerySymbols(tree, text, source)
 	if err != nil {
@@ -181,7 +174,7 @@ func (d *Document) RangeIsLoadedBy(fn func(*Load)) {
 	}
 }
 
-func (d *Document) ResetLoads() {
+func (d *Document) resetLoads() {
 	// Copy to remove from LoadedBy
 	d.loadsMu.RLock()
 	docs := make([]*Load, len(d.DocLoads))

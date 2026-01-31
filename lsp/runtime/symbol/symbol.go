@@ -7,7 +7,6 @@ const (
 	ClassKind SymbolKind = iota
 	FunctionKind
 	VariableKind
-	FieldKind
 )
 
 // Calls types

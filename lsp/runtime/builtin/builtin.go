@@ -9,10 +9,6 @@ import (
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 )
 
-// TODO: bsena; Load builtins from hbuiltin
-// So we can inject with custom names, like 'heph.is_target'
-// Yeah, this will probably be what we will be using
-
 //go:embed target.py
 var target []byte
 

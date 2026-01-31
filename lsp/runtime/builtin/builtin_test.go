@@ -11,7 +11,7 @@ import (
 
 var allDefs = []string{
 	// From helpers.py
-	"text_file", "json_file", "tool_target", "group",
+	"text_file", "json_file", "tool_target", "group", "load",
 
 	// From pybt.py - Top-level functions
 	"abs", "any", "all", "bool", "chr", "dict", "dir",
@@ -19,28 +19,6 @@ var allDefs = []string{
 	"hash", "int", "len", "list", "max", "min", "ord",
 	"print", "range", "repr", "reversed", "set", "sorted",
 	"str", "tuple", "type", "zip",
-
-	// TODO: bsena; extract class
-
-	// From pybt.py - Dict class methods
-	"clear", "get", "items", "keys", "pop", "popitem",
-	"setdefault", "update", "values",
-
-	// From pybt.py - List class methods
-	"append", "clear", "extend", "index", "insert", "pop", "remove",
-
-	// From pybt.py - Set class methods
-	"union",
-
-	// From pybt.py - String class methods
-	"elem_ords", "capitalize", "codepoint_ords", "count",
-	"endswith", "find", "format", "index", "isalnum",
-	"isalpha", "isdigit", "islower", "isspace", "istitle",
-	"isupper", "join", "lower", "lstrip", "partition",
-	"removeprefix", "removesuffix", "replace", "rfind",
-	"rindex", "rpartition", "rsplit", "rstrip", "split",
-	"elems", "codepoints", "splitlines", "startswith",
-	"strip", "title", "upper",
 
 	// From target.py
 	"target",

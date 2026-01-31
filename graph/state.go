@@ -9,7 +9,6 @@ import (
 	"github.com/hephbuild/heph/utils/xfs"
 )
 
-// TODO: bsena; Have a loaded state per LSP so we can find targets?
 type State struct {
 	Root   *hroot.State
 	Config *config.Config

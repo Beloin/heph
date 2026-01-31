@@ -28,14 +28,7 @@ var servelspCmd = &cobra.Command{
 	Aliases:           []string{"s"},
 	ValidArgsFunction: ValidArgsFunctionTargets,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		// TODO: bsena; Probably we need to add options such as "--debug" and "--verbose"
-		// TODO: bsena; To implement more about the starlark, see --builtin-paths
-
-		// TODO: bsena; glsp stoles our ^C, only close with ^D, fix it
 		ctx := cmd.Context()
-
-		// TODO: bsena; This KILLS MY LSP SERVER DONT DO THIS
-		// find another way to get ROOT
 
 		localOpt := bootstrap.BootOpts{}
 		bs, err := bootstrap.BootBase(ctx, localOpt)
@@ -48,6 +41,6 @@ var servelspCmd = &cobra.Command{
 			return err
 		}
 
-		return server.Serve(ctx)
+		return server.Serve()
 	},
 }

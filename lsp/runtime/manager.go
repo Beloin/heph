@@ -10,8 +10,6 @@ import (
 	"github.com/hephbuild/heph/lsp/runtime/builtin"
 	"github.com/hephbuild/heph/lsp/runtime/document"
 	"github.com/hephbuild/heph/lsp/runtime/symbol"
-	"github.com/hephbuild/heph/specs"
-	protocol "github.com/tliron/glsp/protocol_3_16"
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 )
 
@@ -23,21 +21,16 @@ type docTuple struct {
 	Document *document.Document
 
 	// Last reported version
-	version protocol.Integer
+	version int32
 }
-
-// TODO: bsena; Remove protocol usage here, use raw values
 
 type Manager struct {
 	DocumentMap sync.Map
-	TargetMap   map[string]*specs.Target
 
 	BuiltinSymbols []*symbol.Symbol
 	Parser         *tree_sitter.Parser
 
 	WorkspaceFolder string
-
-	// dag.DAG // TODO: bsena; use the dag to know which symbols we can import into that specific BUILD file
 }
 
 func NewManager(parser *tree_sitter.Parser) (*Manager, error) {
@@ -51,7 +44,7 @@ func NewManager(parser *tree_sitter.Parser) (*Manager, error) {
 
 // GetDocument queries and look for an existing document in Manager.
 // returns nil if not present
-func (m *Manager) GetDocument(uri protocol.DocumentUri) (*document.Document, bool) {
+func (m *Manager) GetDocument(uri string) (*document.Document, bool) {
 	uri = normalizeDocName(uri)
 	if val, ok := m.DocumentMap.Load(uri); ok {
 		tuple := val.(*docTuple)
@@ -79,13 +72,10 @@ func (m *Manager) NewDocument(name string, tree *tree_sitter.Tree, rawText []byt
 
 func (m *Manager) SwapTree(doc *document.Document, newT *tree_sitter.Tree, newText []byte) (*tree_sitter.Tree, error) {
 	t, err := doc.SwapTree(newT, newText)
-
 	if err != nil {
 		return nil, err
 	}
 
-
-	// TODO: this will be a problem with update in doc loads...
 	// Load all other documents from all doc.Loads
 	// go m.loadDocumentsFromLoads(doc)
 	m.loadDocumentsFromLoads(doc)
@@ -93,12 +83,9 @@ func (m *Manager) SwapTree(doc *document.Document, newT *tree_sitter.Tree, newTe
 	return t, nil
 }
 
-// TODO: bsena; load statement must import at least 1 symbol
-// Probably fix Loads to Load and the function loaded, so we need to get only exported loads
-// loadDocumentsFromLoads loads documents from load paths
 func (m *Manager) loadDocumentsFromLoads(doc *document.Document) {
 	for _, rawLoad := range doc.Loads {
-		loadPath := rawLoad.Path 
+		loadPath := rawLoad.Path
 		if loadPath == "" {
 			continue
 		}
@@ -117,7 +104,6 @@ func (m *Manager) loadDocumentsFromLoads(doc *document.Document) {
 				continue
 			}
 
-			// TODO: bsena; Probably need to read for BUILD.* or *.BUILD
 			if !strings.Contains(entry.Name(), "BUILD") {
 				continue
 			}
@@ -126,7 +112,7 @@ func (m *Manager) loadDocumentsFromLoads(doc *document.Document) {
 
 			normalizedName := normalizeDocName(filePath)
 			// Skip if already loaded
-			if fDoc, found := m.GetDocument(protocol.DocumentUri(normalizedName)); found {
+			if fDoc, found := m.GetDocument(string(normalizedName)); found {
 				doc.AddLoadedDoc(fDoc, rawLoad.Loads)
 				continue
 			}
@@ -153,7 +139,7 @@ func (m *Manager) loadDocumentsFromLoads(doc *document.Document) {
 			// Cross ref
 			doc.AddLoadedDoc(newDoc, rawLoad.Loads)
 
-			m.setDocument(protocol.DocumentUri(normalizedName), 0, newDoc)
+			m.setDocument(string(normalizedName), 0, newDoc)
 
 			// Recursively load its loads
 			m.loadDocumentsFromLoads(newDoc)
@@ -161,7 +147,7 @@ func (m *Manager) loadDocumentsFromLoads(doc *document.Document) {
 	}
 }
 
-func (m *Manager) setDocument(uri protocol.DocumentUri, version protocol.Integer, doc *document.Document) {
+func (m *Manager) setDocument(uri string, version int32, doc *document.Document) {
 	if val, ok := m.DocumentMap.Load(uri); ok {
 		tuple := val.(*docTuple)
 		tuple.Document.Close()
@@ -180,7 +166,7 @@ type Filter func(s *symbol.Symbol) bool
 
 func (m *Manager) AllLoadedSymbols(filters ...Filter) []*symbol.Symbol {
 	allSymbols := m.BuiltinSymbols
-	m.DocumentMap.Range(func(key, value interface{}) bool {
+	m.DocumentMap.Range(func(key, value any) bool {
 		doc := value.(*docTuple)
 		for _, smb := range doc.Document.Symbols {
 			shoulAdd := true
@@ -248,11 +234,6 @@ func (m *Manager) AllLoadedSymbolsPerKind() kindStruct {
 	}
 }
 
-// TODO: bsena; use a prefix tree and have ALL nodes, even child nodes
-// in that tree using Symbol.Fullname as index
-// Also how to work with imports?
-// Probalby this tree will be in Manager's struct
-// add to /heph/utils/trie
 func (m *Manager) Query(symbolName string) (*symbol.Symbol, bool) {
 	if s, found := symbol.FindSymbol(m.BuiltinSymbols, symbolName); found {
 		return s, true
@@ -307,6 +288,24 @@ func (m *Manager) QueryCallsDoc(symbolName string) []callQueryResult {
 	})
 
 	return res
+}
+
+func (m *Manager) DeleteDocument(uri string) {
+	uri = normalizeDocName(uri)
+	if val, ok := m.DocumentMap.LoadAndDelete(uri); ok {
+		tuple := val.(*docTuple)
+		tuple.Document.Close()
+	}
+}
+
+func (m *Manager) RenameDocument(oldURI string, newURI string) {
+	oldURI = normalizeDocName(oldURI)
+	newURI = normalizeDocName(newURI)
+	if val, ok := m.DocumentMap.LoadAndDelete(oldURI); ok {
+		tuple := val.(*docTuple)
+		tuple.Document.FullPath = newURI
+		m.DocumentMap.Store(newURI, tuple)
+	}
 }
 
 func normalizeDocName(uri string) string {

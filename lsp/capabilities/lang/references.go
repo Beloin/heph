@@ -25,7 +25,7 @@ func TextDocumentReferencesFuncWrapper(manager *runtime.Manager) protocol.TextDo
 	}
 }
 
-// TODO: bsena; We will probably later need a better usage of symbols,
+// TODO: We will probably later need a better usage of symbols,
 // having a symbol oriented query instead of doc based queries
 func findReferences(doc *document.Document, symbolName string) []protocol.Location {
 	var locations []protocol.Location
@@ -52,7 +52,6 @@ func findReferences(doc *document.Document, symbolName string) []protocol.Locati
 	}
 
 	// Search for docs that loads current doc and method
-	// TODO: bsena; search for only those who loads my method
 	doc.RangeIsLoadedBy(func(load *document.Load) {
 		otherDoc := load.Doc
 		if calls := otherDoc.QueryCalls(symbolName); len(calls) > 0 {

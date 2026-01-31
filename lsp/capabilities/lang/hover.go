@@ -10,9 +10,6 @@ import (
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
-// TODO: bsena; DECLARATIONS AND DEFINITIONS SHOULD GO ONLY TO FILES THAT ARE LOADED WITH `load(...)`
-// TODO: bsena; REFERENCES SHOULD SEARCH ONLY TO FILES THAT ARE LOADED WITH `load(...)`
-
 func TextDocumentHoverFuncWrapper(manager *runtime.Manager) protocol.TextDocumentHoverFunc {
 	return func(context *glsp.Context, params *protocol.HoverParams) (*protocol.Hover, error) {
 		doc, ok := manager.GetDocument(params.TextDocument.URI)

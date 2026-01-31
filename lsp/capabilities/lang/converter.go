@@ -5,7 +5,7 @@ import (
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
-func MachineKindToCompletionKind(kind symbol.SymbolKind) protocol.CompletionItemKind {
+func SymbolKindToCompletionKind(kind symbol.SymbolKind) protocol.CompletionItemKind {
 	switch kind {
 	case symbol.FunctionKind:
 		return protocol.CompletionItemKindFunction

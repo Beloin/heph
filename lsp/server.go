@@ -1,7 +1,6 @@
 package lsp
 
 import (
-	"context"
 	"errors"
 	"sync"
 
@@ -26,20 +25,17 @@ import (
 
 var ErrIsClosed = errors.New("server is closed")
 
-// TODO: bsena; define better these interfaces
-
 type LSPServer interface {
 	// Serve blocks until the server stops serving. Errors encountered during this process are returned.
 	// Serve will be called only once for the lifetime of an LSPServer
-	Serve(ctx context.Context) error
-	Close(ctx context.Context) error
+	Serve() error
+	Close() error
 }
 
 type hephLSP struct {
-	h       *protocol.Handler
-	s       *server.Server
-	p       *tree_sitter.Parser
-	manager *runtime.Manager
+	protocolHandler *protocol.Handler
+	server          *server.Server
+	parser          *tree_sitter.Parser
 
 	isClosed bool
 
@@ -51,18 +47,17 @@ func NewHephServer(root *hroot.State) (LSPServer, error) {
 	return newHephLSP(root, false)
 }
 
-func (h *hephLSP) Serve(ctx context.Context) error {
+func (h *hephLSP) Serve() error {
 	if h.isClosed {
 		return ErrIsClosed
 	}
 
-	return h.s.RunStdio()
+	return h.server.RunStdio()
 }
 
-func (h *hephLSP) Close(ctx context.Context) error {
-	// TODO: bsena; How to Implement proper shutdown of lsp server in this method
-	h.p.Close()
-	h.s.GetStdio().Close() //nolint
+func (h *hephLSP) Close() error {
+	h.parser.Close()
+	h.server.GetStdio().Close() //nolint
 	h.isClosed = true
 
 	return nil
@@ -76,24 +71,18 @@ func newHephLSP(root *hroot.State, debug bool) (*hephLSP, error) {
 
 	lsp := &hephLSP{}
 
-	// TODO: See if we can use Startlark tree-sitter
-	// https://github.com/tree-sitter-grammars/tree-sitter-starlark
 	parser := tree_sitter.NewParser()
 	err = parser.SetLanguage(tree_sitter.NewLanguage(tree_sitter_python.Language()))
 	if err != nil {
 		return nil, err
 	}
 
-	// TODO: bsena; see if we can re-use parsers or not
 	manager, err := runtime.NewManager(parser)
 	if err != nil {
 		return nil, err
 	}
 
-	// TODO: bsena; Add here custom capabilities and handler methods for our server
 	handler := &protocol.Handler{
-		// TODO: When initialized, look from the root all BUILD files extracting all symbols for the manager
-
 		// Lifecycle
 		Initialize:  lsp.wrapInitialize(manager),
 		Initialized: lsp.wrapInitialized(),
@@ -105,24 +94,23 @@ func newHephLSP(root *hroot.State, debug bool) (*hephLSP, error) {
 		TextDocumentDidChange: docsync.TextDocumentDidChangeFuncWrapper(manager),
 
 		// Lang features
-		// CompletionItemResolve:    lang.TextDocumentCompletionFuncWrapper(manager),
-		TextDocumentCompletion:    lang.TextDocumentCompletionFuncWrapper(manager),
-		TextDocumentHover:         lang.TextDocumentHoverFuncWrapper(manager),
-		TextDocumentSignatureHelp: lang.TextDocumentSignatureHelpFuncWrapper(manager),
+		TextDocumentCompletion: lang.TextDocumentCompletionFuncWrapper(manager),
+		TextDocumentHover:      lang.TextDocumentHoverFuncWrapper(manager),
 
-		// TextDocumentCodeLens:                TextDocumentCodeLensFunc // TODO: bsena; Implement code lens to copy addr?
+		// Can be implemented Implement code lens to copy addr or give in virtual text a full path of target etc
+		// TextDocumentCodeLens:                TextDocumentCodeLensFunc
 		TextDocumentReferences:  lang.TextDocumentReferencesFuncWrapper(manager),
 		TextDocumentDeclaration: lang.TextDocumentDeclarationFuncWrapper(manager),
 		TextDocumentDefinition:  lang.TextDocumentDefinitionFuncWrapper(manager),
 
-		// TODO: bsena; Need to implement workspace also, so we can rename files etc.
-		// WorkspaceDidRenameFiles: protocol.WorkspaceDidRenameFilesFunc,
+		WorkspaceDidRenameFiles: docsync.WorkspaceDidRenameFilesFunc(manager),
+		WorkspaceDidDeleteFiles: docsync.WorkspaceDidDeleteFilesFunc(manager),
 	}
 	server := server.NewServer(handler, runtime.HephLanguage, debug)
 
-	lsp.h = handler
-	lsp.s = server
-	lsp.p = parser
+	lsp.protocolHandler = handler
+	lsp.server = server
+	lsp.parser = parser
 
 	return lsp, nil
 }
@@ -133,9 +121,7 @@ func configureLogs(root *hroot.State, debug bool) error {
 		verbosity = 2
 	}
 
-	// TODO: bsena; Find a way to prevent using this logger
-	// and use default heph logger
-	logpath := root.Home.Join("lsplogs")
+	logpath := root.Home.Join(".lsplogs")
 	fullpath := logpath.Abs()
 	dst, err := vfssimple.NewFile("file://" + fullpath)
 	if err != nil {
@@ -143,6 +129,7 @@ func configureLogs(root *hroot.State, debug bool) error {
 	}
 	defer dst.Close()
 
+	// tliron/glsp forces us to use this weird logger
 	commonlog.Configure(verbosity, &fullpath)
 
 	return nil
@@ -156,7 +143,7 @@ func (h *hephLSP) wrapInitialize(manager *runtime.Manager) protocol.InitializeFu
 			return nil, err
 		}
 
-		capabilities := h.h.CreateServerCapabilities()
+		capabilities := h.protocolHandler.CreateServerCapabilities()
 
 		return protocol.InitializeResult{
 			Capabilities: capabilities,
