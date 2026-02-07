@@ -26,7 +26,7 @@ require (
 	github.com/charmbracelet/bubbletea v1.3.9
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/charmbracelet/x/term v0.2.1
-	github.com/creack/pty v1.1.20
+	github.com/creack/pty v1.1.21
 	github.com/go-faker/faker/v4 v4.5.0
 	github.com/go-logr/logr v1.4.2
 	github.com/go-viper/mapstructure/v2 v2.2.1
@@ -43,6 +43,8 @@ require (
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.10.0
+	github.com/tliron/commonlog v0.2.8
+	github.com/tree-sitter/tree-sitter-python v0.25.0
 	github.com/viney-shih/go-lock v1.1.2
 	github.com/zeebo/xxh3 v1.0.2
 	github.com/zolstein/sync-map v0.0.0-20241114025029-d8a8d5a801cb
@@ -64,6 +66,18 @@ require (
 	golang.org/x/sync v0.14.0
 	golang.org/x/sys v0.36.0
 	google.golang.org/protobuf v1.36.7-0.20250625222701-8e8926ef675d
+)
+
+require (
+	github.com/gorilla/websocket v1.5.1 // indirect
+	github.com/iancoleman/strcase v0.3.0 // indirect
+	github.com/mattn/go-pointer v0.0.1 // indirect
+	github.com/petermattis/goid v0.0.0-20180202154549-b0b1615b78e5 // indirect
+	github.com/pkg/errors v0.9.1 // indirect
+	github.com/sasha-s/go-deadlock v0.3.1 // indirect
+	github.com/sourcegraph/jsonrpc2 v0.2.0 // indirect
+	github.com/tliron/kutil v0.3.11 // indirect
+	golang.org/x/term v0.31.0 // indirect
 )
 
 require (
@@ -116,6 +130,8 @@ require (
 	github.com/spiffe/go-spiffe/v2 v2.5.0 // indirect
 	github.com/tklauser/go-sysconf v0.3.14 // indirect
 	github.com/tklauser/numcpus v0.9.0 // indirect
+	github.com/tliron/glsp v0.2.2
+	github.com/tree-sitter/go-tree-sitter v0.25.0
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	github.com/zeebo/errs v1.4.0 // indirect

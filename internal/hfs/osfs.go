@@ -248,6 +248,7 @@ func (osfs OS) ReadDir(name string) ([]DirEntry, error) {
 	return os.ReadDir(osfs.join(name))
 }
 
+// Path joins elems with OS.root
 func (osfs OS) Path(elems ...string) string {
 	args := []string{osfs.root}
 	args = append(args, elems...)
