@@ -7,15 +7,24 @@ const (
 	ClassKind SymbolKind = iota
 	FunctionKind
 	VariableKind
+	ValueKind
+	StructKind
 )
+
+// TODO: bsena; Maybe we really actually need types
+// Instead of only relying in Kind
 
 // Calls types
 const (
 	FunctionCallKind = iota + 4
+	// TODO: bsena; THIS IS NOT BEING USED
 	TargetCallKind
 )
 
 type Position struct {
+	ByteStart uint
+	ByteEnd   uint
+
 	RowStart    uint
 	ColumnStart uint
 	RowEnd      uint
@@ -28,10 +37,12 @@ type rawPosition struct {
 }
 
 type Parameter struct {
-	Name         string
-	Type         string
-	Value string
-	DocString    string
+	Name string
+
+	Value     string
+	DocString string
+
+	Type *Type
 }
 
 type Symbol struct {
@@ -40,6 +51,7 @@ type Symbol struct {
 
 	FullyQualifiedName string
 
+	// TODO: bsena; Maybe instead of Kind we can use only type?
 	Kind      SymbolKind
 	Signature string
 
@@ -54,6 +66,8 @@ type Symbol struct {
 	SignaturePosition rawPosition
 
 	Symbols []*Symbol
+
+	Type Type
 }
 
 func (s *Symbol) Is(kind SymbolKind) bool {

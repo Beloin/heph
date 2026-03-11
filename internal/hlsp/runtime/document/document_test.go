@@ -27,7 +27,7 @@ func (s *DocumentTestSuite) TestNewDocument() {
 	tree := parser.Parse(pythonTestFile, nil)
 	s.Require().NotNil(tree)
 
-	doc, err := document.NewDocument("test.py", tree, pythonTestFile)
+	doc, err := document.NewDocument("test.py", tree, pythonTestFile, nil)
 	s.Require().NoError(err)
 	s.Require().NotNil(doc)
 
@@ -46,7 +46,7 @@ func (s *DocumentTestSuite) TestSwapTree() {
 	tree := parser.Parse(pythonTestFile, nil)
 	s.Require().NotNil(tree)
 
-	doc, err := document.NewDocument("test.py", tree, pythonTestFile)
+	doc, err := document.NewDocument("test.py", tree, pythonTestFile, nil)
 	s.Require().NoError(err)
 	s.Require().NotNil(doc)
 
@@ -84,7 +84,7 @@ func (s *DocumentTestSuite) TestQuery() {
 	tree := parser.Parse(pythonTestFile, nil)
 	s.Require().NotNil(tree)
 
-	doc, err := document.NewDocument("test.py", tree, pythonTestFile)
+	doc, err := document.NewDocument("test.py", tree, pythonTestFile, nil)
 	s.Require().NoError(err)
 	s.Require().NotNil(doc)
 

@@ -11,7 +11,7 @@ import (
 
 // TODO: bsena; This will all be changed, we should use the plugin layer using the "server" connection
 
-//go:embed target.py
+//go:embed target2.py
 var target []byte
 
 //go:embed helpers.py
@@ -22,8 +22,19 @@ var pybt []byte
 
 const builtinSource = "hbuiltins"
 
-// ParseBuiltins Parses builtin files and extracts their symbols.
-func ParseBuiltins(parser *tree_sitter.Parser) ([]*symbol.Symbol, error) {
+// TODO: bsena; We will actually create builtins by "hand"
+// The pybt can be still loaded from the python files
+// but starlark should be manually created
+
+var (
+	targetSymbols  []*symbol.Symbol
+	helpersSymbols []*symbol.Symbol
+	pybtSymbols    []*symbol.Symbol
+)
+
+// InitBuiltins parses all builtin stub files and stores the results in package-level vars.
+// Must be called once before using any getter.
+func InitBuiltins(parser *tree_sitter.Parser) error {
 	targetTree := parser.Parse(target, nil)
 	defer targetTree.Close()
 
@@ -33,20 +44,42 @@ func ParseBuiltins(parser *tree_sitter.Parser) ([]*symbol.Symbol, error) {
 	pybtTree := parser.Parse(pybt, nil)
 	defer pybtTree.Close()
 
-	targetSymbols, err := query.QuerySymbols(targetTree, target, builtinSource)
+	var err error
+
+	targetSymbols, err = query.QuerySymbols(targetTree, target, builtinSource, nil)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	helpersSymbols, err := query.QuerySymbols(helpersTree, helpers, builtinSource)
+	helpersSymbols, err = query.QuerySymbols(helpersTree, helpers, builtinSource, nil)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	pybtSymbols, err := query.QuerySymbols(pybtTree, pybt, builtinSource)
+	pybtSymbols, err = query.QuerySymbols(pybtTree, pybt, builtinSource, nil)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	return slices.Concat(targetSymbols, helpersSymbols, pybtSymbols), nil
+	return nil
+}
+
+// GetTarget returns the symbols parsed from target2.py (the target() builtin).
+func GetTarget() []*symbol.Symbol {
+	return targetSymbols
+}
+
+// GetHelpers returns the symbols parsed from helpers.py (load, group, text_file, …).
+func GetHelpers() []*symbol.Symbol {
+	return helpersSymbols
+}
+
+// GetSKBuiltins returns the symbols parsed from pybt.py (Starlark built-ins: abs, any, len, …).
+func GetSKBuiltins() []*symbol.Symbol {
+	return pybtSymbols
+}
+
+// All returns all builtin symbols concatenated.
+func All() []*symbol.Symbol {
+	return slices.Concat(targetSymbols, helpersSymbols, pybtSymbols)
 }

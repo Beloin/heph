@@ -42,14 +42,27 @@ const variablesQuery = `
 )
 `
 
+// TODO: bsena; Also extract struct like expressions so you can match them
+// this will also be helpfull with heph.obj.otherfn
+// And also wil be helpfull with new driver providers
+
 var ErrEmptyTreeError = errors.New("empty tree")
 
 var lang = tree_sitter.NewLanguage(tree_sitter_python.Language())
 
-func QuerySymbols(tree *tree_sitter.Tree, text []byte, source string) ([]*symbol.Symbol, error) {
+// SymbolResolver allows type name lookup without coupling query to document.
+// TODO: bsena; add this elsewhere
+type SymbolResolver interface {
+	QueryType(name string) (*symbol.Type, bool)
+}
+
+// TODO: Maybe create a query that query all symbols of type object
+// so we can match heph.myfun
+
+func QuerySymbols(tree *tree_sitter.Tree, text []byte, source string, resolver SymbolResolver) ([]*symbol.Symbol, error) {
 	symbols := []*symbol.Symbol{}
 
-	funcSymbols, err := ExtractFunctions(tree, text, source)
+	funcSymbols, err := ExtractFunctions(tree, text, source, resolver)
 	if err != nil {
 		return nil, err
 	}
@@ -64,7 +77,9 @@ func QuerySymbols(tree *tree_sitter.Tree, text []byte, source string) ([]*symbol
 	return symbols, nil
 }
 
-func ExtractFunctions(tree *tree_sitter.Tree, text []byte, source string) ([]*symbol.Symbol, error) {
+// ExtractFunctions extracts function symbols from the tree.
+// resolver is optional (may be nil); when nil, only primitive types are resolved.
+func ExtractFunctions(tree *tree_sitter.Tree, text []byte, source string, resolver SymbolResolver) ([]*symbol.Symbol, error) {
 	if tree.RootNode() == nil {
 		return nil, ErrEmptyTreeError
 	}
@@ -103,6 +118,7 @@ func ExtractFunctions(tree *tree_sitter.Tree, text []byte, source string) ([]*sy
 				// First capture group
 				currSymbol.Position.RowStart = nodeRange.StartPoint.Row
 				currSymbol.Position.ColumnStart = nodeRange.StartPoint.Column
+				currSymbol.Position.ByteStart = nodeRange.StartByte
 
 				currSymbol.Name = patternValue
 				currSymbol.Signature = patternValue + "()" // empty params is the default
@@ -116,7 +132,7 @@ func ExtractFunctions(tree *tree_sitter.Tree, text []byte, source string) ([]*sy
 				currSymbol.Parameters = append(currSymbol.Parameters, currParam)
 			case "function.param.type":
 				if currParam != nil {
-					currParam.Type = patternValue
+					currParam.Type = resolveType(patternValue, resolver)
 				}
 			case "function.param.value":
 				if currParam != nil {
@@ -128,8 +144,8 @@ func ExtractFunctions(tree *tree_sitter.Tree, text []byte, source string) ([]*sy
 				// Last capture group
 				currSymbol.Position.RowEnd = nodeRange.EndPoint.Row
 				currSymbol.Position.ColumnEnd = nodeRange.EndPoint.Column
+				currSymbol.Position.ByteEnd = nodeRange.EndByte
 			}
-
 		}
 
 		parseArgsFromDocstring(currSymbol.DocString, currSymbol.Parameters)
@@ -169,6 +185,7 @@ func ExtractVariables(tree *tree_sitter.Tree, text []byte, source string) ([]*sy
 				// First capture group
 				currSymbol.Position.RowStart = nodeRange.StartPoint.Row
 				currSymbol.Position.ColumnStart = nodeRange.StartPoint.Column
+				currSymbol.Position.ByteStart = nodeRange.StartByte
 
 				currSymbol.Name = patternValue
 				currSymbol.Signature = patternValue
@@ -181,8 +198,8 @@ func ExtractVariables(tree *tree_sitter.Tree, text []byte, source string) ([]*sy
 				// Last capture group
 				currSymbol.Position.RowEnd = nodeRange.EndPoint.Row
 				currSymbol.Position.ColumnEnd = nodeRange.EndPoint.Column
+				currSymbol.Position.ByteEnd = nodeRange.EndByte
 			}
-
 		}
 
 		vars = append(vars, currSymbol)
@@ -216,6 +233,18 @@ func processCommentLines(comment string) string {
 	}
 
 	return strings.Join(processedLines, "\n")
+}
+
+func resolveType(typeName string, resolver SymbolResolver) *symbol.Type {
+	if resolver == nil {
+		return symbol.ResolveType(typeName)
+	}
+
+	if s, found := resolver.QueryType(typeName); found {
+		return s
+	}
+
+	return nil
 }
 
 func parseArgsFromDocstring(docstring string, params []*symbol.Parameter) {

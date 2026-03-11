@@ -72,5 +72,3 @@ func FindCalls(symbols []*Symbol, sName string) []*Symbol {
 	return result
 }
 
-
-

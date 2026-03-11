@@ -1,0 +1,12 @@
+@startuml Manager Arch
+
+object manager
+object doc
+object Registry
+
+manager *-> doc
+manager --> Registry
+
+doc --> Registry
+
+@enduml

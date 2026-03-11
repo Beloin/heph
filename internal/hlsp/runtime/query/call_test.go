@@ -4,8 +4,8 @@ import (
 	_ "embed"
 	"testing"
 
-	"github.com/hephbuild/heph/internal/hlsp/runtime/symbol"
 	"github.com/hephbuild/heph/internal/hlsp/runtime/query"
+	"github.com/hephbuild/heph/internal/hlsp/runtime/symbol"
 	"github.com/stretchr/testify/suite"
 
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
@@ -83,17 +83,17 @@ func (suite *CallQuerySuite) TestFunctionCallParameters() {
 	suite.Require().Len(myOtherCallSymbol.Parameters, 3, "my_other_call should have 3 parameters")
 	suite.Require().Equal("0", myOtherCallSymbol.Parameters[0].Name, "first parameter should be named '0'")
 	suite.Require().Equal("arg1", myOtherCallSymbol.Parameters[0].Value, "first parameter should have correct value")
-	suite.Require().Equal("1", myOtherCallSymbol.Parameters[1].Name, "second parameter should be named '1'")
-	suite.Require().Equal("kwarg1=\"literal\"", myOtherCallSymbol.Parameters[1].Value, "second parameter should have correct value")
-	suite.Require().Equal("2", myOtherCallSymbol.Parameters[2].Name, "third parameter should be named '2'")
-	suite.Require().Equal("kwarg2=12", myOtherCallSymbol.Parameters[2].Value, "third parameter should have correct value")
+	suite.Require().Equal("kwarg1", myOtherCallSymbol.Parameters[1].Name, "second parameter should be named '1'")
+	suite.Require().Equal("\"literal\"", myOtherCallSymbol.Parameters[1].Value, "second parameter should have correct value")
+	suite.Require().Equal("kwarg2", myOtherCallSymbol.Parameters[2].Name, "third parameter should be named '2'")
+	suite.Require().Equal("12", myOtherCallSymbol.Parameters[2].Value, "third parameter should have correct value")
 }
 
 func (suite *CallQuerySuite) TestExtractFunctions() {
 	parser := suite.newParser()
 	pythonTree := parser.Parse(callTest, nil)
 
-	symbols, err := query.QuerySymbols(pythonTree, callTest, "")
+	symbols, err := query.QuerySymbols(pythonTree, callTest, "", nil)
 	suite.Require().NoError(err)
 
 	// Find the my_func symbol
@@ -111,15 +111,15 @@ func (suite *CallQuerySuite) TestExtractFunctions() {
 
 	// param1: str
 	suite.Require().Equal("param1", myFunc.Parameters[0].Name)
-	suite.Require().Equal("str", myFunc.Parameters[0].Type)
+	suite.Require().Equal("str", myFunc.Parameters[0].Type.Name)
 
 	// param2: Union[str, int]
 	suite.Require().Equal("param2", myFunc.Parameters[1].Name)
-	suite.Require().Equal("Union[str, int]", myFunc.Parameters[1].Type)
+	suite.Require().Equal("Union[str, int]", myFunc.Parameters[1].Type.Name)
 
 	// param3: List[str] with default []
 	suite.Require().Equal("param3", myFunc.Parameters[2].Name)
-	suite.Require().Equal("List[str]", myFunc.Parameters[2].Type)
+	suite.Require().Equal("List[str]", myFunc.Parameters[2].Type.Name)
 	suite.Require().Equal("[]", myFunc.Parameters[2].Value)
 }
 

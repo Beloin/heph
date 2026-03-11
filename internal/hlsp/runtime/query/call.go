@@ -13,6 +13,8 @@ const callQuery = `
 (call function: (identifier) @call.name . (argument_list (_) @call.arg)? ) @call.stmt
 `
 
+// TODO: bsena; Later we can query for return type...
+
 func QueryCalls(tree *tree_sitter.Tree, text []byte, source string) ([]*symbol.Symbol, error) {
 	if tree.RootNode() == nil {
 		return nil, ErrEmptyTreeError
@@ -50,10 +52,23 @@ func QueryCalls(tree *tree_sitter.Tree, text []byte, source string) ([]*symbol.S
 				currSymbol.FullyQualifiedName = patternValue
 				currSymbol.Position.RowStart = nodeRange.StartPoint.Row
 				currSymbol.Position.ColumnStart = nodeRange.StartPoint.Column
+				currSymbol.Position.ByteStart = nodeRange.StartByte
 
 				funs[currentNode.Id()] = currSymbol
 			case "call.arg":
 				newParam := symbol.Parameter{Name: strconv.Itoa(len(currSymbol.Parameters)), Value: patternValue}
+
+				// Is kwarg
+				if currentNode.Kind() == "keyword_argument" {
+					if name := currentNode.ChildByFieldName("name"); name != nil {
+						newParam.Name = name.Utf8Text(text)
+					}
+
+					if value := currentNode.ChildByFieldName("value"); value != nil {
+						newParam.Value = value.Utf8Text(text)
+					}
+				}
+
 				currSymbol.Parameters = append(currSymbol.Parameters, &newParam)
 
 				// Last pattern
@@ -61,6 +76,7 @@ func QueryCalls(tree *tree_sitter.Tree, text []byte, source string) ([]*symbol.S
 				currSymbol.Position.ColumnEnd = nodeRange.EndPoint.Column
 			case "call.stmt":
 				currSymbol.Signature = patternValue
+				currSymbol.Position.ByteEnd = nodeRange.EndByte
 			}
 		}
 	}

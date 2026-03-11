@@ -4,11 +4,13 @@ import (
 	"errors"
 	"sync"
 
+	"github.com/hephbuild/heph/internal/engine"
 	"github.com/hephbuild/heph/internal/hfs"
 	"github.com/hephbuild/heph/internal/hlsp/capabilities/lang"
 	"github.com/hephbuild/heph/internal/hlsp/capabilities/lifecycle"
 	docsync "github.com/hephbuild/heph/internal/hlsp/capabilities/sync"
 	"github.com/hephbuild/heph/internal/hlsp/runtime"
+	runtimedriver "github.com/hephbuild/heph/internal/hlsp/runtime/driver"
 
 	"github.com/tliron/commonlog"
 	protocol "github.com/tliron/glsp/protocol_3_16"
@@ -42,8 +44,8 @@ type hephLSP struct {
 	_ [0]sync.Mutex
 }
 
-func NewLSPServer(home *hfs.OS) (LSPServer, error) {
-	return newHephLSP(home, false)
+func NewLSPServer(e *engine.Engine) (LSPServer, error) {
+	return newHephLSP(e, false)
 }
 
 func (h *hephLSP) Serve() error {
@@ -62,8 +64,8 @@ func (h *hephLSP) Close() error {
 	return nil
 }
 
-func newHephLSP(home *hfs.OS, debug bool) (*hephLSP, error) {
-	err := configureLogs(home, debug)
+func newHephLSP(engine *engine.Engine, debug bool) (*hephLSP, error) {
+	err := configureLogs(&engine.Home, debug)
 	if err != nil {
 		return nil, err
 	}
@@ -76,7 +78,8 @@ func newHephLSP(home *hfs.OS, debug bool) (*hephLSP, error) {
 		return nil, err
 	}
 
-	manager, err := runtime.NewManager(parser)
+	registry := runtimedriver.NewRegistry(engine)
+	manager, err := runtime.NewManager(parser, registry)
 	if err != nil {
 		return nil, err
 	}

@@ -37,7 +37,7 @@ func (suite *QuerySuite) TestFunctionQuery() {
 	parser := suite.newParser()
 	pythonTree := parser.Parse(pythonTest, nil)
 
-	symbols, err := query.ExtractFunctions(pythonTree, pythonTest, "")
+	symbols, err := query.ExtractFunctions(pythonTree, pythonTest, "", nil)
 	suite.Require().NoError(err)
 
 	names := []string{}
@@ -54,7 +54,7 @@ func (suite *QuerySuite) TestFunctionParametersQuery() {
 	parser := suite.newParser()
 	pythonTree := parser.Parse(pythonTest, nil)
 
-	symbols, err := query.ExtractFunctions(pythonTree, pythonTest, "")
+	symbols, err := query.ExtractFunctions(pythonTree, pythonTest, "", nil)
 	suite.Require().NoError(err)
 
 	suite.Require().NotNil(symbols)
@@ -116,7 +116,7 @@ func (suite *QuerySuite) TestFunctionArgsDoc() {
 	parser := suite.newParser()
 	pythonTree := parser.Parse(pythonTest, nil)
 
-	symbols, err := query.ExtractFunctions(pythonTree, pythonTest, "")
+	symbols, err := query.ExtractFunctions(pythonTree, pythonTest, "", nil)
 	suite.Require().NoError(err)
 
 	// Find my_documented_function
@@ -132,11 +132,11 @@ func (suite *QuerySuite) TestFunctionArgsDoc() {
 	suite.Require().Len(documentedFunc.Parameters, 2, "my_documented_function should have 2 parameters")
 
 	suite.Require().Equal("param1", documentedFunc.Parameters[0].Name)
-	suite.Require().Equal("str", documentedFunc.Parameters[0].Type)
+	suite.Require().Equal("str", documentedFunc.Parameters[0].Type.Name)
 	suite.Require().Equal("The first parameter.", documentedFunc.Parameters[0].DocString)
 
 	suite.Require().Equal("param2", documentedFunc.Parameters[1].Name)
-	suite.Require().Equal("int", documentedFunc.Parameters[1].Type)
+	suite.Require().Equal("int", documentedFunc.Parameters[1].Type.Name)
 	suite.Require().Equal("The second parameter. Defaults to 0.", documentedFunc.Parameters[1].DocString)
 	suite.Require().Equal("0", documentedFunc.Parameters[1].Value)
 }

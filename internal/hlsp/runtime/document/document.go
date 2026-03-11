@@ -1,11 +1,15 @@
 package document
 
 import (
+	"context"
+	"slices"
 	"strings"
 	"sync"
+	"time"
 	"unsafe"
 
 	"github.com/hephbuild/heph/internal/hlsp/runtime/builtin"
+	"github.com/hephbuild/heph/internal/hlsp/runtime/driver"
 	"github.com/hephbuild/heph/internal/hlsp/runtime/query"
 	"github.com/hephbuild/heph/internal/hlsp/runtime/symbol"
 
@@ -18,6 +22,7 @@ type Document struct {
 
 	Symbols []*symbol.Symbol
 	Calls   []*symbol.Symbol
+	Targets []*symbol.Symbol
 
 	// Loads are the BUILD path,
 	// if any file has it name changed or delete,
@@ -32,6 +37,8 @@ type Document struct {
 
 	treeMutex sync.Mutex
 	loadsMu   sync.RWMutex
+
+	drivers *driver.Registry
 }
 
 type RawLoad struct {
@@ -70,16 +77,19 @@ func (d *Document) Close() {
 	d.Tree.Close()
 }
 
-func NewDocument(name string, tree *tree_sitter.Tree, rawText []byte) (*Document, error) {
+func NewDocument(name string, tree *tree_sitter.Tree, rawText []byte, drivers *driver.Registry) (*Document, error) {
 	doc := &Document{
 		FullPath: name, Tree: tree, Text: rawText, TextString: string(rawText),
 		DocLoads: make(map[string]*Load), IsLoadedBy: make(map[string]*Load),
+		drivers: drivers,
 	}
 
-	syms, calls, err := extractSymbols(doc.Tree, doc.Text, doc.FullPath)
+	syms, calls, targets, err := extractSymbols(doc.Tree, doc.Text, doc.FullPath, doc)
 	doc.Symbols = syms
 	doc.Calls = calls
+	doc.Targets = targets
 	doc.extractLoads()
+	go doc.extractTargets()
 
 	return doc, err
 }
@@ -91,34 +101,109 @@ func (d *Document) SwapTree(newT *tree_sitter.Tree, newText []byte) (*tree_sitte
 
 	oldTree := d.Tree
 
-	syms, calls, err := extractSymbols(newT, newText, d.FullPath)
+	syms, calls, targets, err := extractSymbols(newT, newText, d.FullPath, d)
 	if err != nil {
 		return nil, err
 	}
 
 	d.Symbols = syms
 	d.Calls = calls
+	d.Targets = targets
 	d.Tree = newT
 	d.Text = newText
 	d.TextString = string(newText)
 
 	d.resetLoads()
 	d.extractLoads()
+	go d.extractTargets()
 
 	oldTree.Close()
 
 	return oldTree, err
 }
 
-func extractSymbols(tree *tree_sitter.Tree, text []byte, source string) ([]*symbol.Symbol, []*symbol.Symbol, error) {
-	symbols, err := query.QuerySymbols(tree, text, source)
-	if err != nil {
-		return nil, nil, err
+func (d *Document) extractTargets() {
+	resolved := make([]*symbol.Symbol, 0, len(d.Targets))
+
+	for _, call := range d.Targets {
+		var schema *symbol.Symbol
+
+		var driverName string
+		for _, p := range call.Parameters {
+			if p.Name == builtin.DriverName {
+				driverName = strings.Trim(p.Value, "\"'")
+				break
+			}
+		}
+
+		if driverName != "" && d.drivers != nil {
+			if drv, ok := d.drivers.GetDriver(driverName); ok {
+				ctx, cancel := context.WithTimeout(context.TODO(), 200*time.Millisecond)
+				s, err := driver.SymbolFromTargetDriver(ctx, drv)
+				cancel()
+				if err == nil {
+					schema = s
+				}
+			}
+		}
+
+		// Fallback to global target definition when driver is unset or resolution failed.
+		if schema == nil {
+			if targets := builtin.GetTarget(); len(targets) > 0 {
+				schema = targets[0]
+			}
+		}
+
+		if schema != nil {
+			// Preserve the call's position so position-based lookups still work.
+			schema.Position = call.Position
+		} else {
+			schema = call
+		}
+
+		resolved = append(resolved, schema)
 	}
 
-	calls, err := query.QueryCalls(tree, text, source)
+	slices.SortFunc(resolved, func(i, j *symbol.Symbol) int {
+		if i.Position.ByteStart < j.Position.ByteStart {
+			return -1
+		}
 
-	return symbols, calls, err
+		if i.Position.ByteStart > j.Position.ByteStart {
+			return 1
+		}
+
+		return 0
+	})
+
+	d.treeMutex.Lock()
+	defer d.treeMutex.Unlock()
+
+	d.Targets = resolved
+}
+
+func extractSymbols(tree *tree_sitter.Tree, text []byte, source string, resolver query.SymbolResolver) ([]*symbol.Symbol, []*symbol.Symbol, []*symbol.Symbol, error) {
+	symbols, err := query.QuerySymbols(tree, text, source, resolver)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	allCalls, err := query.QueryCalls(tree, text, source)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	var calls, targets []*symbol.Symbol
+	for _, call := range allCalls {
+		if call.Name == builtin.TargetName {
+			call.Kind = symbol.TargetCallKind
+			targets = append(targets, call)
+		} else {
+			calls = append(calls, call)
+		}
+	}
+
+	return symbols, calls, targets, err
 }
 
 func (d *Document) extractLoads() {
@@ -137,6 +222,7 @@ func (d *Document) extractLoads() {
 				fun := strings.Trim(rawFunction, "\"")
 				loadsSlice = append(loadsSlice, fun)
 			}
+
 			loads = append(loads, &RawLoad{Path: path, Loads: loadsSlice})
 		}
 	}
@@ -165,6 +251,28 @@ func (d *Document) Query(symbolName string) (*symbol.Symbol, bool) {
 	return symbol.FindSymbol(d.Symbols, symbolName)
 }
 
+// QueryType resolves a type name: primitives first, then own symbols, then loaded doc symbols.
+// Implements query.SymbolResolver.
+func (d *Document) QueryType(name string) (*symbol.Type, bool) {
+	if p := symbol.ResolveType(name); p != nil {
+		return p, true
+	}
+
+	if s, found := symbol.FindSymbol(d.Symbols, name); found {
+		return &s.Type, true
+	}
+
+	d.loadsMu.RLock()
+	defer d.loadsMu.RUnlock()
+	for _, load := range d.DocLoads {
+		if s, found := symbol.FindSymbol(load.Doc.Symbols, name); found {
+			return &s.Type, true
+		}
+	}
+
+	return nil, false
+}
+
 func (d *Document) QueryMany(symbolName []string) (*symbol.Symbol, bool) {
 	return symbol.FindManySymbol(d.Symbols, symbolName)
 }
@@ -175,6 +283,35 @@ func (d *Document) QueryAll(symbolName []string) []*symbol.Symbol {
 
 func (d *Document) QueryCalls(symbolName string) []*symbol.Symbol {
 	return symbol.FindCalls(d.Calls, symbolName)
+}
+
+func (d *Document) QueryTargets() []*symbol.Symbol {
+	return d.Targets
+}
+
+// QueryClosestTarget returns the target whose ByteStart is closest to (and not after) pos.
+// Targets must be sorted by ByteStart, which extractTargets guarantees.
+func (d *Document) QueryClosestTarget(pos uint) *symbol.Symbol {
+	targets := d.Targets
+	if len(targets) == 0 {
+		return nil
+	}
+
+	// Find the first index where ByteStart > pos, then step back one.
+	// So we get the closest from the start of the file
+	idx, _ := slices.BinarySearchFunc(targets, pos, func(s *symbol.Symbol, p uint) int {
+		if s.Position.ByteStart <= p {
+			return -1
+		}
+
+		return 1
+	})
+
+	if idx == 0 {
+		return nil
+	}
+
+	return targets[idx-1]
 }
 
 func (d *Document) RangeDocLoads(fn func(*Load)) {

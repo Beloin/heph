@@ -16,6 +16,9 @@ func SymbolKindToCompletionKind(kind symbol.SymbolKind) protocol.CompletionItemK
 	case symbol.ClassKind:
 		return protocol.CompletionItemKindClass
 
+	case symbol.StructKind:
+		return protocol.CompletionItemKindStruct
+
 	default:
 		return protocol.CompletionItemKindValue
 	}

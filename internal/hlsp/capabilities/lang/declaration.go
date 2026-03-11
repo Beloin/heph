@@ -66,6 +66,8 @@ func extractLocation(manager *runtime.Manager, uri string, pos *protocol.Positio
 			}
 		}
 
+		// TODO: bsena; IF IT IS A TARGET EXTRACT THE DRIVER
+
 		if symbolName := doc.ExtractCurrentSymbolName(pos); symbolName != "" {
 			// Current doc
 			if sym, found := doc.Query(symbolName); found {

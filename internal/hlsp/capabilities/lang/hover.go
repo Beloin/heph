@@ -5,29 +5,51 @@ import (
 	"strings"
 
 	"github.com/hephbuild/heph/internal/hlsp/runtime"
+	"github.com/hephbuild/heph/internal/hlsp/runtime/builtin"
 	"github.com/hephbuild/heph/internal/hlsp/runtime/symbol"
 	"github.com/tliron/glsp"
+
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
 func TextDocumentHoverFuncWrapper(manager *runtime.Manager) protocol.TextDocumentHoverFunc {
-	return func(context *glsp.Context, params *protocol.HoverParams) (*protocol.Hover, error) {
+	return func(glspContext *glsp.Context, params *protocol.HoverParams) (*protocol.Hover, error) {
 		doc, ok := manager.GetDocument(params.TextDocument.URI)
 		if !ok {
 			return &protocol.Hover{}, nil
 		}
-
 		bytePos := params.Position.IndexIn(doc.TextString)
 
 		if literal := doc.ExtractCurrentStringLiteral(uint(bytePos)); literal != "" {
 			return createLiteralHover(literal), nil
 		}
 
+		// TODO: bsena; Maybe create a chain-like validations?
+		// Looks cleaner
+
 		symbolName := doc.ExtractCurrentSymbolName(uint(bytePos))
+
+		if symbolName == builtin.TargetName {
+			if s := doc.QueryClosestTarget(uint(bytePos)); s != nil {
+				return createHover(s), nil
+			}
+		}
 
 		// If is an argument inside a function call we can get the function name and args information
 		funName := doc.ExtractCurrentFunctionName(uint(bytePos))
-		if s, found := manager.Query(funName); found {
+
+		// Give target info from the first enclosing function call in document
+		if funName == builtin.TargetName {
+			if s := doc.QueryClosestTarget(uint(bytePos)); s != nil {
+				for _, p := range s.Parameters {
+					if strings.Contains(p.Name, symbolName) {
+						return createArgHover(s, p), nil
+					}
+				}
+			}
+		}
+
+		if s, found := doc.Query(funName); found {
 			for _, p := range s.Parameters {
 				if strings.Contains(p.Name, symbolName) {
 					return createArgHover(s, p), nil
@@ -87,8 +109,8 @@ func createArgHover(fn *symbol.Symbol, param *symbol.Parameter) *protocol.Hover 
 
 	sb.WriteString(param.Name)
 
-	if param.Type != "" {
-		sb.WriteString(":" + param.Type)
+	if param.Type != nil && param.Type.Name != "" {
+		sb.WriteString(":" + param.Type.Name)
 	}
 
 	if param.Value != "" {

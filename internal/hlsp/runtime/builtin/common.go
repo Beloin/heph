@@ -1,6 +1,8 @@
 package builtin
 
-// Builtins names
+// Builtins names.
 const (
-	LoadName = "load"
+	LoadName   = "load"
+	TargetName = "target"
+	DriverName = "driver"
 )

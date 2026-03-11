@@ -9,7 +9,9 @@ import (
 
 	"github.com/hephbuild/heph/internal/hlsp/runtime/builtin"
 	"github.com/hephbuild/heph/internal/hlsp/runtime/document"
+	runtimedriver "github.com/hephbuild/heph/internal/hlsp/runtime/driver"
 	"github.com/hephbuild/heph/internal/hlsp/runtime/symbol"
+	"github.com/hephbuild/heph/lib/pluginsdk"
 
 	tree_sitter "github.com/tree-sitter/go-tree-sitter"
 )
@@ -26,6 +28,7 @@ type docTuple struct {
 }
 
 // TODO: bsena; There are a few changes to be made here based on new heph changes, like plugins, drivers etc
+// Also I need to match heph.fun and functions like this
 
 type Manager struct {
 	DocumentMap sync.Map
@@ -34,15 +37,21 @@ type Manager struct {
 	Parser         *tree_sitter.Parser
 
 	WorkspaceFolder string
+
+	Drivers *runtimedriver.Registry
 }
 
-func NewManager(parser *tree_sitter.Parser) (*Manager, error) {
-	builtins, err := builtin.ParseBuiltins(parser)
-	if err != nil {
+func NewManager(parser *tree_sitter.Parser, registry *runtimedriver.Registry) (*Manager, error) {
+	if err := builtin.InitBuiltins(parser); err != nil {
 		return nil, err
 	}
 
-	return &Manager{DocumentMap: sync.Map{}, Parser: parser, BuiltinSymbols: builtins}, nil
+	return &Manager{DocumentMap: sync.Map{}, Parser: parser, BuiltinSymbols: builtin.All(), Drivers: registry}, nil
+}
+
+// GetDriver
+func (m *Manager) GetDriver(name string) (pluginsdk.Driver, bool) {
+	return m.Drivers.GetDriver(name)
 }
 
 // GetDocument queries and look for an existing document in Manager.
@@ -54,13 +63,12 @@ func (m *Manager) GetDocument(uri string) (*document.Document, bool) {
 		return tuple.Document, true
 	}
 
-
 	return nil, false
 }
 
 func (m *Manager) NewDocument(name string, tree *tree_sitter.Tree, rawText []byte, version int32) (*document.Document, error) {
 	name = normalizeDocName(name)
-	newDoc, err := document.NewDocument(name, tree, rawText)
+	newDoc, err := document.NewDocument(name, tree, rawText, m.Drivers)
 	if err != nil {
 		return nil, err
 	}
@@ -140,7 +148,7 @@ func (m *Manager) loadDocumentsFromLoads(doc *document.Document) {
 			}
 
 			// Create new document and ignore if there's an error
-			newDoc, err := document.NewDocument(normalizedName, tree, content)
+			newDoc, err := document.NewDocument(normalizedName, tree, content, m.Drivers)
 			if err != nil {
 				tree.Close()
 				continue
@@ -242,6 +250,10 @@ func (m *Manager) AllLoadedSymbolsPerKind() kindStruct {
 		Variables:  vars,
 		Functions:  funs,
 	}
+}
+
+func (m *Manager) GetTargetBuiltin() (*symbol.Symbol, bool) {
+	return symbol.FindSymbol(m.BuiltinSymbols, builtin.TargetName)
 }
 
 func (m *Manager) Query(symbolName string) (*symbol.Symbol, bool) {

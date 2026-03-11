@@ -39,9 +39,10 @@ func (suite *BuiltinSuite) newParser() *tree_sitter.Parser {
 
 func (suite *BuiltinSuite) TestSymbols() {
 	parser := suite.newParser()
-	symbols, err := builtin.ParseBuiltins(parser)
+	err := builtin.InitBuiltins(parser)
 	suite.Require().NoError(err)
 
+	symbols := builtin.All()
 	suite.Require().NotNil(symbols)
 	suite.Require().NotEmpty(symbols)
 

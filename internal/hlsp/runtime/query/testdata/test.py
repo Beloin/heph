@@ -38,3 +38,6 @@ print(my_custom_result)
 print("literal_value")
 
 print(22)
+
+
+heph.inner.fun()

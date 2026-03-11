@@ -4,7 +4,6 @@ import (
 	"errors"
 
 	"github.com/hephbuild/heph/internal/engine"
-	"github.com/hephbuild/heph/internal/hfs"
 	"github.com/hephbuild/heph/internal/hlsp"
 	"github.com/spf13/cobra"
 )
@@ -31,7 +30,7 @@ func init() {
 		Aliases:           []string{"s"},
 		ValidArgsFunction: cmdArgs.ValidArgsFunction(),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// ctx := cmd.Context()
+			ctx := cmd.Context()
 
 			// localOpt := bootstrap.BootOpts{}
 			// bs, err := bootstrap.BootBase(ctx, localOpt)
@@ -44,16 +43,14 @@ func init() {
 				return err
 			}
 
-			rootfs := hfs.NewOS(root)
 			// TODO: bsena; Read yaml files to know drivers/plugins etc
-			// eg, err := newEngine(ctx, root)
-			// if err != nil {
-			// 	return err
-			// }
+			eg, err := newEngine(ctx, root)
+			if err != nil {
+				return err
+			}
 
 			// Use home to create log file
-			home := rootfs
-			server, err := hlsp.NewLSPServer(&home)
+			server, err := hlsp.NewLSPServer(eg)
 			if err != nil {
 				return err
 			}
