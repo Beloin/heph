@@ -21,9 +21,10 @@ func TextDocumentCompletionFuncWrapper(manager *runtime.Manager) protocol.TextDo
 			// If is function we can get args completion
 			funName := doc.ExtractCurrentFunctionName(uint(byteOffset))
 			if s, found := manager.Query(funName); found {
-				if s.Is(symbol.FunctionKind) {
+				if s.Is(symbol.FunctionKind) || s.Is(symbol.FunctionCallKind) || s.Is(symbol.TargetCallKind) {
 					args := s.Parameters
 					if args != nil {
+						// TODO: bsena; If is a target?
 						completionItems = createCompletionItemForArgs(args, s)
 					}
 				}

@@ -125,9 +125,10 @@ func (d *Document) SwapTree(newT *tree_sitter.Tree, newText []byte) (*tree_sitte
 func (d *Document) extractTargets() {
 	resolved := make([]*symbol.Symbol, 0, len(d.Targets))
 
-	for _, call := range d.Targets {
-		var schema *symbol.Symbol
+	// TODO: bsena; add error treatment
+	btTarget := builtin.GetTarget()[0]
 
+	for _, call := range d.Targets {
 		var driverName string
 		for _, p := range call.Parameters {
 			if p.Name == builtin.DriverName {
@@ -136,34 +137,29 @@ func (d *Document) extractTargets() {
 			}
 		}
 
-		if driverName != "" && d.drivers != nil {
-			if drv, ok := d.drivers.GetDriver(driverName); ok {
-				ctx, cancel := context.WithTimeout(context.TODO(), 200*time.Millisecond)
-				s, err := driver.SymbolFromTargetDriver(ctx, drv)
-				cancel()
-				if err == nil {
-					schema = s
-				}
-			}
+		// Ignore any invalid driver
+		if driverName == "" {
+			defaultTarget := *btTarget
+			resolved = append(resolved, &defaultTarget)
+
+			continue
 		}
 
-		// Fallback to global target definition when driver is unset or resolution failed.
-		if schema == nil {
-			if targets := builtin.GetTarget(); len(targets) > 0 {
-				schema = targets[0]
-			}
-		}
-
-		if schema != nil {
-			// Preserve the call's position so position-based lookups still work.
-			schema.Position = call.Position
-		} else {
+		schema, found := d.getDriverSchema(driverName)
+		if !found {
+			// Back to what it was
 			schema = call
+			schema.Signature += " // driver `" + driverName + "` not found"
 		}
+
+		// Preserve the call's position so position-based lookups still work.
+		schema.Position = call.Position
+		schema.DocString = btTarget.DocString
 
 		resolved = append(resolved, schema)
 	}
 
+	// Sorting in order of position in file
 	slices.SortFunc(resolved, func(i, j *symbol.Symbol) int {
 		if i.Position.ByteStart < j.Position.ByteStart {
 			return -1
@@ -180,6 +176,20 @@ func (d *Document) extractTargets() {
 	defer d.treeMutex.Unlock()
 
 	d.Targets = resolved
+}
+
+func (d *Document) getDriverSchema(driverName string) (*symbol.Symbol, bool) {
+	if drv, ok := d.drivers.GetDriver(driverName); ok {
+		ctx, cancel := context.WithTimeout(context.TODO(), 200*time.Millisecond)
+		defer cancel()
+
+		s, err := driver.SymbolFromTargetDriver(ctx, drv)
+		if err == nil {
+			return s, true
+		}
+	}
+
+	return nil, false
 }
 
 func extractSymbols(tree *tree_sitter.Tree, text []byte, source string, resolver query.SymbolResolver) ([]*symbol.Symbol, []*symbol.Symbol, []*symbol.Symbol, error) {
