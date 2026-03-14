@@ -4,6 +4,7 @@ import (
 	"github.com/hephbuild/heph/internal/hlsp/runtime"
 	"github.com/hephbuild/heph/internal/hlsp/runtime/builtin"
 	"github.com/hephbuild/heph/internal/hlsp/runtime/document"
+	"github.com/hephbuild/heph/internal/hlsp/runtime/query"
 	"github.com/hephbuild/heph/internal/hlsp/runtime/symbol"
 	"github.com/tliron/commonlog"
 	"github.com/tliron/glsp"
@@ -28,11 +29,15 @@ func TextDocumentCompletionFuncWrapper(manager *runtime.Manager) protocol.TextDo
 					completionItems = createCompletionItemForArgs(s.Parameters, s)
 				}
 			} else { // Do not fallback to builtins
-				if s, found := manager.Query(funName); found {
-					if s.Is(symbol.FunctionKind) || s.Is(symbol.FunctionCallKind) {
-						if s.Parameters != nil {
-							completionItems = createCompletionItemForArgs(s.Parameters, s)
-						}
+				switch doc.WhereAmI(offset) {
+				// TODO: bsena; THIS IS NOT WORKING
+				case query.BlockLocation:
+					if s, found := doc.Query(funName); found {
+						completionItems = append(completionItems, createCompletionItemsForSymbols(s.Symbols)...)
+					}
+				case query.ArgsLocation:
+					if s, found := doc.Query(funName); found {
+						completionItems = append(completionItems, createCompletionItemForArgs(s.Parameters, s)...)
 					}
 				}
 			}
@@ -80,6 +85,14 @@ func createCompletionItem(symbol *symbol.Symbol) protocol.CompletionItem {
 		Documentation: doc,
 	}
 	return compItem
+}
+
+func createCompletionItemsForSymbols(syms []*symbol.Symbol) []protocol.CompletionItem {
+	items := []protocol.CompletionItem{}
+	for _, s := range syms {
+		items = append(items, createCompletionItem(s))
+	}
+	return items
 }
 
 func createCompletionItemForArgs(args []*symbol.Parameter, s *symbol.Symbol) []protocol.CompletionItem {

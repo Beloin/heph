@@ -63,8 +63,8 @@ func NewSymbolFromTargetSchema(resp *pluginv1.ConfigResponse) (*symbol.Symbol, e
 			sigBuilder.WriteString(", ")
 		}
 		sigBuilder.WriteString(p.Name)
-		if p.Type.IsKnown() {
-			sigBuilder.WriteString(":" + p.Type.String())
+		if p.Type != nil {
+			sigBuilder.WriteString(":" + p.Type.Name)
 		}
 	}
 	sigBuilder.WriteString(")")
@@ -75,9 +75,9 @@ func NewSymbolFromTargetSchema(resp *pluginv1.ConfigResponse) (*symbol.Symbol, e
 	return sym, nil
 }
 
-// fieldToType converts a FieldDescriptorProto into a *symbol.Type representing
-// the field's type. For TYPE_MESSAGE it uses the simple message name.
-func fieldToType(f *descriptorpb.FieldDescriptorProto, parent *descriptorpb.DescriptorProto) *symbol.Type {
+// fieldToType converts a FieldDescriptorProto into a *symbol.Symbol representing
+// the field's type. For TYPE_MESSAGE it creates a ClassKind symbol with the message name.
+func fieldToType(f *descriptorpb.FieldDescriptorProto, parent *descriptorpb.DescriptorProto) *symbol.Symbol {
 	if f.GetType() == descriptorpb.FieldDescriptorProto_TYPE_MESSAGE {
 		typeName := f.GetTypeName()
 		parts := strings.Split(typeName, ".")
@@ -87,11 +87,11 @@ func fieldToType(f *descriptorpb.FieldDescriptorProto, parent *descriptorpb.Desc
 		// descriptor has the map_entry option set.
 		for _, nt := range parent.GetNestedType() {
 			if nt.GetName() == simpleName && nt.GetOptions().GetMapEntry() {
-				return &symbol.Type{Name: f.GetJsonName()}
+				return symbol.DictType
 			}
 		}
 
-		return &symbol.Type{Name: simpleName}
+		return &symbol.Symbol{Name: simpleName, Kind: symbol.ClassKind}
 	}
 
 	// Scalar / primitive types.
@@ -111,6 +111,6 @@ func fieldToType(f *descriptorpb.FieldDescriptorProto, parent *descriptorpb.Desc
 		descriptorpb.FieldDescriptorProto_TYPE_DOUBLE:
 		return symbol.PrimitiveFloat
 	default:
-		return &symbol.Type{Name: f.GetType().String()}
+		return &symbol.Symbol{Name: f.GetType().String(), Kind: symbol.PrimitiveKind}
 	}
 }

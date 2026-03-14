@@ -6,6 +6,7 @@ import (
 
 	"github.com/hephbuild/heph/internal/hlsp/runtime"
 	"github.com/hephbuild/heph/internal/hlsp/runtime/builtin"
+	"github.com/hephbuild/heph/internal/hlsp/runtime/query"
 	"github.com/hephbuild/heph/internal/hlsp/runtime/symbol"
 	"github.com/tliron/glsp"
 
@@ -24,8 +25,11 @@ func TextDocumentHoverFuncWrapper(manager *runtime.Manager) protocol.TextDocumen
 			return createLiteralHover(literal), nil
 		}
 
-		// TODO: bsena; Maybe create a chain-like validations?
-		// Looks cleaner
+		// TODO: bsena; Maybe create a chain-like validations? Looks cleaner
+
+		// TODO: bsena; this does not get builtin like heph.pkg.addr
+
+		// TODO: bsena; We need to find a way to get vars from inside a function
 
 		symbolName := doc.ExtractCurrentSymbolName(uint(bytePos))
 
@@ -41,6 +45,25 @@ func TextDocumentHoverFuncWrapper(manager *runtime.Manager) protocol.TextDocumen
 		// Give target info from the first enclosing function call in document
 		if funName == builtin.TargetName {
 			if s := doc.QueryClosestTarget(uint(bytePos)); s != nil {
+				for _, p := range s.Parameters {
+					if strings.Contains(p.Name, symbolName) {
+						return createArgHover(s, p), nil
+					}
+				}
+			}
+		}
+
+		// TODO: bsena; maybe the chain can use this
+		switch doc.WhereAmI(uint(bytePos)) {
+		case query.BlockLocation:
+			// TODO: bsena; THIS IS NOT WORKING
+			if s, found := doc.Query(funName); found {
+				if inner, found := symbol.FindSymbolInSymbols(s, symbolName); found {
+					return createHover(inner), nil
+				}
+			}
+		case query.ArgsLocation:
+			if s, found := doc.Query(funName); found {
 				for _, p := range s.Parameters {
 					if strings.Contains(p.Name, symbolName) {
 						return createArgHover(s, p), nil
@@ -78,8 +101,8 @@ func createHover(sym *symbol.Symbol) *protocol.Hover {
 
 	if sym.Is(symbol.VariableKind) {
 		sig := sym.Name
-		if sym.Type.IsKnown() {
-			sig += ":" + sym.Type.String()
+		if sym.Type != nil {
+			sig += ":" + sym.Type.Name
 		}
 		sig += " = " + sym.Value
 		sb.WriteString(langDecorateMultiline(sig, runtime.HephLanguage))
@@ -113,8 +136,8 @@ func createArgHover(fn *symbol.Symbol, param *symbol.Parameter) *protocol.Hover 
 
 	sb.WriteString(param.Name)
 
-	if param.Type.IsKnown() {
-		sb.WriteString(":" + param.Type.String())
+	if param.Type != nil {
+		sb.WriteString(":" + param.Type.Name)
 	}
 
 	if param.Value != "" {

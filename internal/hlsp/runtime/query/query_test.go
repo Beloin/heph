@@ -37,7 +37,7 @@ func (suite *QuerySuite) TestFunctionQuery() {
 	parser := suite.newParser()
 	pythonTree := parser.Parse(pythonTest, nil)
 
-	symbols, err := query.ExtractFunctions(pythonTree, pythonTest, "", nil)
+	symbols, err := query.ExtractFunctions(pythonTree, pythonTest, "")
 	suite.Require().NoError(err)
 
 	names := []string{}
@@ -54,7 +54,7 @@ func (suite *QuerySuite) TestFunctionParametersQuery() {
 	parser := suite.newParser()
 	pythonTree := parser.Parse(pythonTest, nil)
 
-	symbols, err := query.ExtractFunctions(pythonTree, pythonTest, "", nil)
+	symbols, err := query.ExtractFunctions(pythonTree, pythonTest, "")
 	suite.Require().NoError(err)
 
 	suite.Require().NotNil(symbols)
@@ -99,7 +99,7 @@ func (suite *QuerySuite) TestVariablesQuery() {
 	parser := suite.newParser()
 	pythonTree := parser.Parse(pythonTest, nil)
 
-	symbols, err := query.ExtractVariables(pythonTree, pythonTest, "")
+	symbols, err := query.ExtractVariables(pythonTree, pythonTest, "", nil)
 	suite.Require().NoError(err)
 
 	names := []string{}
@@ -116,7 +116,7 @@ func (suite *QuerySuite) TestFunctionArgsDoc() {
 	parser := suite.newParser()
 	pythonTree := parser.Parse(pythonTest, nil)
 
-	symbols, err := query.ExtractFunctions(pythonTree, pythonTest, "", nil)
+	symbols, err := query.ExtractFunctions(pythonTree, pythonTest, "")
 	suite.Require().NoError(err)
 
 	// Find my_documented_function

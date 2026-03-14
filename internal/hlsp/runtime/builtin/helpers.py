@@ -69,3 +69,13 @@ def load(name: str, *funs: str):
         funs (str): List of functions loaded
     """
     pass
+
+
+def glob(pattern: str, exclude: Optional[List[str]] = None) -> List[str]:
+    """Matches files relative to the current package directory.
+
+    Args:
+        pattern (str): Glob pattern to match (e.g. "./*", "**/*.go")
+        exclude (Optional[List[str]]): Patterns to exclude from the match
+    """
+    pass

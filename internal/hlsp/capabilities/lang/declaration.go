@@ -47,6 +47,7 @@ func extractLocation(manager *runtime.Manager, uri string, pos *protocol.Positio
 
 				// Fallback to default BUILD file of that directory since we don't know where that heph can be
 				literal = strings.Split(literal, ":")[0]
+				// TODO: bsena; Read the yaml to know it it will be always BUILD
 				literal = path.Join(literal, "BUILD")
 				fullPath := path.Join(manager.WorkspaceFolder, literal)
 
@@ -66,9 +67,10 @@ func extractLocation(manager *runtime.Manager, uri string, pos *protocol.Positio
 			}
 		}
 
-		// TODO: bsena; IF IT IS A TARGET EXTRACT THE DRIVER
-
 		if symbolName := doc.ExtractCurrentSymbolName(pos); symbolName != "" {
+			// TODO: bsena; If inside block, query local symbols
+			doc.WhereAmI(pos)
+
 			// Current doc
 			if sym, found := doc.Query(symbolName); found {
 				return buildLocationFromSymbol(doc.FullPath, sym), true

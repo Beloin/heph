@@ -45,30 +45,32 @@ const variablesQuery = `
 // TODO: bsena; Also extract struct like expressions so you can match them
 // this will also be helpfull with heph.obj.otherfn
 // And also wil be helpfull with new driver providers
+// They are object:
+//   (expression_statement ; [31, 0] - [31, 5]
+// (attribute ; [31, 0] - [31, 5]
+//   object: (attribute ; [31, 0] - [31, 3]
+//     object: (identifier) ; [31, 0] - [31, 1]
+//     attribute: (identifier)) ; [31, 2] - [31, 3]
+//   attribute: (identifier)))) ; [31, 4] - [31, 5]
+//
 
 var ErrEmptyTreeError = errors.New("empty tree")
 
 var lang = tree_sitter.NewLanguage(tree_sitter_python.Language())
 
-// SymbolResolver allows type name lookup without coupling query to document.
-// TODO: bsena; add this elsewhere
-type SymbolResolver interface {
-	QueryType(name string) (*symbol.Type, bool)
-}
-
 // TODO: Maybe create a query that query all symbols of type object
 // so we can match heph.myfun
 
-func QuerySymbols(tree *tree_sitter.Tree, text []byte, source string, resolver SymbolResolver) ([]*symbol.Symbol, error) {
+func QuerySymbols(tree *tree_sitter.Tree, text []byte, source string) ([]*symbol.Symbol, error) {
 	symbols := []*symbol.Symbol{}
 
-	funcSymbols, err := ExtractFunctions(tree, text, source, resolver)
+	funcSymbols, err := ExtractFunctions(tree, text, source)
 	if err != nil {
 		return nil, err
 	}
 	symbols = append(symbols, funcSymbols...)
 
-	varSymbols, err := ExtractVariables(tree, text, source)
+	varSymbols, err := ExtractVariables(tree, text, source, funcSymbols)
 	if err != nil {
 		return nil, err
 	}
@@ -78,8 +80,7 @@ func QuerySymbols(tree *tree_sitter.Tree, text []byte, source string, resolver S
 }
 
 // ExtractFunctions extracts function symbols from the tree.
-// resolver is optional (may be nil); when nil, only primitive types are resolved.
-func ExtractFunctions(tree *tree_sitter.Tree, text []byte, source string, resolver SymbolResolver) ([]*symbol.Symbol, error) {
+func ExtractFunctions(tree *tree_sitter.Tree, text []byte, source string) ([]*symbol.Symbol, error) {
 	if tree.RootNode() == nil {
 		return nil, ErrEmptyTreeError
 	}
@@ -132,7 +133,7 @@ func ExtractFunctions(tree *tree_sitter.Tree, text []byte, source string, resolv
 				currSymbol.Parameters = append(currSymbol.Parameters, currParam)
 			case "function.param.type":
 				if currParam != nil {
-					currParam.Type = resolveType(patternValue, resolver)
+					currParam.Type = ResolveType(patternValue)
 				}
 			case "function.param.value":
 				if currParam != nil {
@@ -154,7 +155,7 @@ func ExtractFunctions(tree *tree_sitter.Tree, text []byte, source string, resolv
 	return slices.Collect(maps.Values(funs)), nil
 }
 
-func ExtractVariables(tree *tree_sitter.Tree, text []byte, source string) ([]*symbol.Symbol, error) {
+func ExtractVariables(tree *tree_sitter.Tree, text []byte, source string, funs []*symbol.Symbol) ([]*symbol.Symbol, error) {
 	root := tree.RootNode()
 	if root == nil {
 		return nil, ErrEmptyTreeError
@@ -175,10 +176,15 @@ func ExtractVariables(tree *tree_sitter.Tree, text []byte, source string) ([]*sy
 	for match := matches.Next(); match != nil; match = matches.Next() {
 
 		currSymbol := &symbol.Symbol{Kind: symbol.VariableKind, Source: source}
+		var lastNode *tree_sitter.Node
+
 		for _, capture := range match.Captures {
 			patternName := query.CaptureNames()[capture.Index]
-			patternValue := capture.Node.Utf8Text(text)
-			nodeRange := capture.Node.Range()
+			node := &capture.Node
+			lastNode = node
+
+			patternValue := node.Utf8Text(text)
+			nodeRange := node.Range()
 
 			switch patternName {
 			case "var.name":
@@ -193,25 +199,45 @@ func ExtractVariables(tree *tree_sitter.Tree, text []byte, source string) ([]*sy
 			case "var.comment":
 				currSymbol.DocString = sanitizeComment(patternValue)
 			case "var.value":
-				if t := symbol.ResolveType(capture.Node.Kind()); t != nil {
-					currSymbol.Type = *t
-				}
-
+				currSymbol.Type = ResolveType(node.Kind())
 				currSymbol.Value = patternValue
 
-				// Last capture group
+				// Last capture group — set position then check for enclosing function.
 				currSymbol.Position.RowEnd = nodeRange.EndPoint.Row
 				currSymbol.Position.ColumnEnd = nodeRange.EndPoint.Column
 				currSymbol.Position.ByteEnd = nodeRange.EndByte
 			}
 		}
 
-		vars = append(vars, currSymbol)
+		if funNode := getFunctionNameNodeIfExists(lastNode); funNode != nil {
+			funcName := funNode.Utf8Text(text)
+			if fn, found := symbol.FindSymbol(funs, funcName); found {
+				fn.Symbols = append(fn.Symbols, currSymbol)
+			}
+		} else {
+			vars = append(vars, currSymbol)
+		}
 	}
 
 	return vars, nil
 }
 
+func getFunctionNameNodeIfExists(node *tree_sitter.Node) *tree_sitter.Node {
+	for funNode := node; funNode.Parent() != nil; funNode = funNode.Parent() {
+		if funNode.Kind() != "function_definition" {
+			continue
+		}
+
+		nameNode := funNode.ChildByFieldName("name")
+		if nameNode == nil {
+			break
+		}
+
+		return nameNode
+	}
+
+	return nil
+}
 
 func sanitizeComment(cmmt string) string {
 	if cmmt, ok := strings.CutPrefix(cmmt, "#"); ok {
@@ -238,18 +264,6 @@ func processCommentLines(comment string) string {
 	}
 
 	return strings.Join(processedLines, "\n")
-}
-
-func resolveType(typeName string, resolver SymbolResolver) *symbol.Type {
-	if resolver == nil {
-		return symbol.ResolveType(typeName)
-	}
-
-	if s, found := resolver.QueryType(typeName); found {
-		return s
-	}
-
-	return nil
 }
 
 func parseArgsFromDocstring(docstring string, params []*symbol.Parameter) {

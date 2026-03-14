@@ -1,6 +1,7 @@
 package sync
 
 import (
+	"bytes"
 	"errors"
 
 	"github.com/hephbuild/heph/internal/hlsp/runtime"
@@ -18,7 +19,6 @@ var (
 )
 
 func TextDocumentDidOpenWrapper(manager *runtime.Manager) protocol.TextDocumentDidOpenFunc {
-
 	return func(context *glsp.Context, params *protocol.DidOpenTextDocumentParams) error {
 		parser := manager.Parser
 		text := params.TextDocument.Text
@@ -41,7 +41,6 @@ func TextDocumentDidOpenWrapper(manager *runtime.Manager) protocol.TextDocumentD
 			return ErrInvalidTree
 		}
 
-
 		return nil
 	}
 }
@@ -58,13 +57,19 @@ func TextDocumentDidChangeFuncWrapper(manager *runtime.Manager) protocol.TextDoc
 				text := doc.TextString
 				insertBytes := []byte(event.Text)
 
+				// TODO: bsena;
+				// TO fix this we need to go though each string char and check
+				// if it's rune is >= 0x10000 (with DecodeRuneInString) meaning it is
+				// a two point rune (utf-16) which is the default/max accepted by lsp protocol
+
 				startByteOffset, endByteOffset := event.Range.IndexesIn(text)
-				endByte := uint(endByteOffset) + uint(len(insertBytes))
+				// TODO: bsena; I think we need to calculate this better, bc its not 1 byte == one char
+				endByte := startByteOffset + len(insertBytes)
 
 				editInput := tree_sitter.InputEdit{
 					StartByte:  uint(startByteOffset),
 					OldEndByte: uint(endByteOffset),
-					NewEndByte: endByte,
+					NewEndByte: uint(endByte),
 
 					StartPosition: tree_sitter.Point{
 						Row:    uint(event.Range.Start.Line),
@@ -74,10 +79,10 @@ func TextDocumentDidChangeFuncWrapper(manager *runtime.Manager) protocol.TextDoc
 						Row:    uint(event.Range.End.Line),
 						Column: uint(event.Range.End.Character),
 					},
-					NewEndPosition: tree_sitter.Point{
-						Row:    uint(event.Range.End.Line),
-						Column: endByte * 2,
-					},
+					NewEndPosition: calcNewEndPosition(insertBytes, tree_sitter.Point{
+						Row:    uint(event.Range.Start.Line),
+						Column: uint(event.Range.Start.Character),
+					}),
 				}
 
 				doc.Tree.Edit(&editInput)
@@ -102,54 +107,27 @@ func TextDocumentDidChangeFuncWrapper(manager *runtime.Manager) protocol.TextDoc
 	}
 }
 
+// calcNewEndPosition computes the tree-sitter end point after applying insertBytes
+// starting at start. Row advances by the number of newlines in insertBytes;
+// Column is the byte count after the last newline (or start.Column + len if no newlines).
+func calcNewEndPosition(insertBytes []byte, start tree_sitter.Point) tree_sitter.Point {
+	newlines := bytes.Count(insertBytes, []byte{'\n'})
+	if newlines == 0 {
+		return tree_sitter.Point{
+			Row:    start.Row,
+			Column: start.Column + uint(len(insertBytes)),
+		}
+	}
+	lastNL := bytes.LastIndexByte(insertBytes, '\n')
+	return tree_sitter.Point{
+		Row:    start.Row + uint(newlines),
+		Column: uint(len(insertBytes) - lastNL - 1),
+	}
+}
+
 // ParseNewBytes creates a new byte array to insert changes from client
-// Later we can check if we can do it inplace
 func ParseNewBytes(current, insert []byte, offsetStart, offsetEnd int) []byte {
-	diff := offsetEnd - offsetStart
-	newLen := len(current) + len(insert) - diff
-	newSlice := make([]byte, newLen)
-
-	// Corner case: empty insert "" means delete
-	if len(insert) == 0 {
-		insertIndex := 0
-		for i := 0; i < len(current); i++ {
-			if i >= offsetStart && i < offsetEnd {
-				continue
-			}
-
-			newSlice[insertIndex] = current[i]
-			insertIndex++
-		}
-
-		return newSlice
-	}
-
-	// In the same request we can have Replace or Insert
-	// Replace: offsetEnd > i, meaning we will overwrite any char until that offset
-	// Insert:  Always insert
-	insertIndex := 0
-	currentIndex := 0
-	for i := 0; i < newLen; i++ {
-		if i >= offsetStart {
-			// Replace
-			if i < offsetEnd {
-				currentIndex++
-
-			}
-
-			// Insert
-			if insertIndex < len(insert) {
-				newSlice[i] = insert[insertIndex]
-				insertIndex++
-
-				continue
-			}
-		}
-
-		// Copy
-		newSlice[i] = current[currentIndex]
-		currentIndex++
-	}
-
-	return newSlice
+	result := append(current[:offsetStart:offsetStart], insert...)
+	result = append(result, current[offsetEnd:]...)
+	return result
 }

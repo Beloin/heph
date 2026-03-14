@@ -93,7 +93,7 @@ func (suite *CallQuerySuite) TestExtractFunctions() {
 	parser := suite.newParser()
 	pythonTree := parser.Parse(callTest, nil)
 
-	symbols, err := query.QuerySymbols(pythonTree, callTest, "", nil)
+	symbols, err := query.QuerySymbols(pythonTree, callTest, "")
 	suite.Require().NoError(err)
 
 	// Find the my_func symbol

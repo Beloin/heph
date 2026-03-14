@@ -9,6 +9,10 @@ const (
 	VariableKind
 	ValueKind
 	StructKind
+	// FieldKind is used for intermediate segments of dotted-path names (e.g. "heph" in "heph.pkg.dir").
+	FieldKind
+	// PrimitiveKind is used for built-in primitive type sentinels (int, str, bool, …).
+	PrimitiveKind
 )
 
 // TODO: bsena; Maybe we really actually need types
@@ -42,7 +46,10 @@ type Parameter struct {
 	Value     string
 	DocString string
 
-	Type *Type
+	// Type points to the symbol representing this parameter's type.
+	// nil means unknown. For primitives it points to a sentinel (e.g. PrimitiveInt).
+	// For user-defined types it points to the class symbol resolved at parse time.
+	Type *Symbol
 }
 
 type Symbol struct {
@@ -51,7 +58,6 @@ type Symbol struct {
 
 	FullyQualifiedName string
 
-	// TODO: bsena; Maybe instead of Kind we can use only type?
 	Kind      SymbolKind
 	Signature string
 
@@ -67,9 +73,37 @@ type Symbol struct {
 
 	Symbols []*Symbol
 
-	Type Type
+	// Type points to the symbol representing this symbol's type (nil if unknown).
+	Type *Symbol
 }
 
 func (s *Symbol) Is(kind SymbolKind) bool {
 	return s.Kind == kind
 }
+
+// TODO: bsena; rename after remove from common
+// FindSymbolInSymbols searches only the top-level Symbols of parent for name.
+func FindSymbolInSymbols(parent *Symbol, name string) (*Symbol, bool) {
+	for _, s := range parent.Symbols {
+		if s.Name == name {
+			return s, true
+		}
+	}
+	return nil, false
+}
+
+
+// Primitive type sentinels. These are the canonical *Symbol values for built-in types.
+// Parameter.Type and Symbol.Type point to these for primitive types.
+// For user-defined types they point to the class symbol resolved at parse time.
+var (
+	PrimitiveInt    = &Symbol{Name: "int",     Kind: PrimitiveKind}
+	PrimitiveFloat  = &Symbol{Name: "float",   Kind: PrimitiveKind}
+	PrimitiveBool   = &Symbol{Name: "bool",    Kind: PrimitiveKind}
+	PrimitiveNull   = &Symbol{Name: "Null",    Kind: PrimitiveKind}
+	PrimitiveString = &Symbol{Name: "str",     Kind: PrimitiveKind}
+	DictType        = &Symbol{Name: "dict",    Kind: PrimitiveKind}
+	ListType        = &Symbol{Name: "list",    Kind: PrimitiveKind}
+	ObjectType      = &Symbol{Name: "object",  Kind: PrimitiveKind}
+	UnknownType     = &Symbol{Name: "unknown", Kind: PrimitiveKind}
+)

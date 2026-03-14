@@ -88,7 +88,7 @@ func NewDocument(name string, tree *tree_sitter.Tree, rawText []byte, drivers *d
 		drivers: drivers,
 	}
 
-	syms, calls, targets, err := extractSymbols(doc.Tree, doc.Text, doc.FullPath, doc)
+	syms, calls, targets, err := extractSymbols(doc.Tree, doc.Text, doc.FullPath)
 	doc.Symbols = syms
 	doc.Calls = calls
 	doc.Targets = targets
@@ -109,10 +109,9 @@ func (d *Document) SwapTree(parser *tree_sitter.Parser, newText []byte) (*tree_s
 		return nil, ErrParseFailed
 	}
 
-
 	oldTree := d.Tree
 
-	syms, calls, targets, err := extractSymbols(newT, newText, d.FullPath, d)
+	syms, calls, targets, err := extractSymbols(newT, newText, d.FullPath)
 	if err != nil {
 		return nil, err
 	}
@@ -204,12 +203,13 @@ func (d *Document) getDriverSchema(driverName string) (*symbol.Symbol, bool) {
 	return nil, false
 }
 
-func extractSymbols(tree *tree_sitter.Tree, text []byte, source string, resolver query.SymbolResolver) ([]*symbol.Symbol, []*symbol.Symbol, []*symbol.Symbol, error) {
-	symbols, err := query.QuerySymbols(tree, text, source, resolver)
+func extractSymbols(tree *tree_sitter.Tree, text []byte, source string) ([]*symbol.Symbol, []*symbol.Symbol, []*symbol.Symbol, error) {
+	symbols, err := query.QuerySymbols(tree, text, source)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
+	// TODO: bsena; Someone is updating tree/text withou waiting for this query
 	allCalls, err := query.QueryCalls(tree, text, source)
 	if err != nil {
 		return nil, nil, nil, err
@@ -265,31 +265,45 @@ func (d *Document) ExtractCurrentSymbolName(byteOffSet uint) string {
 	return query.ExtractCurrentSymbol(d.Tree.RootNode(), d.Text, byteOffSet)
 }
 
+func (d *Document) WhereAmI(byteOffSet uint) query.CodeLocation {
+	return query.WhereAmI(d.Tree.RootNode(), d.Text, byteOffSet)
+}
+
 func (d *Document) ExtractCurrentFunctionName(byteOffSet uint) string {
 	return query.ExtractFunctionNameFromOffset(d.Tree.RootNode(), d.Text, byteOffSet)
 }
 
-func (d *Document) Query(symbolName string) (*symbol.Symbol, bool) {
-	return symbol.FindSymbol(d.Symbols, symbolName)
-}
-
-// QueryType resolves a type name: primitives first, then own symbols, then loaded doc symbols.
-// Implements query.SymbolResolver.
-func (d *Document) QueryType(name string) (*symbol.Type, bool) {
-	if p := symbol.ResolveType(name); p != nil {
-		return p, true
+// QueryType resolves a type name to its defining symbol.
+// Only PrimitiveKind and ClassKind symbols are returned to avoid confusing
+// variables or functions that happen to share a type name.
+func (d *Document) QueryType(name string) (*symbol.Symbol, bool) {
+	if s := query.ResolveType(name); s != nil {
+		return s, true
 	}
 
-	// TODO: bsena; Why this?
 	if s, found := symbol.FindSymbol(d.Symbols, name); found {
-		return &s.Type, true
+		if s.Is(symbol.PrimitiveKind) || s.Is(symbol.ClassKind) {
+			return s, true
+		}
 	}
 
 	d.loadsMu.RLock()
 	defer d.loadsMu.RUnlock()
 	for _, load := range d.DocLoads {
 		if s, found := symbol.FindSymbol(load.Doc.Symbols, name); found {
-			return &s.Type, true
+			if s.Is(symbol.PrimitiveKind) || s.Is(symbol.ClassKind) {
+				return s, true
+			}
+		}
+	}
+
+	return nil, false
+}
+
+func (d *Document) Query(symbolName string) (*symbol.Symbol, bool) {
+	for _, symbol := range d.Symbols {
+		if symbol.FullyQualifiedName == symbolName {
+			return symbol, true
 		}
 	}
 
