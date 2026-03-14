@@ -25,13 +25,7 @@ func TextDocumentDidOpenWrapper(manager *runtime.Manager) protocol.TextDocumentD
 		bts := []byte(text)
 
 		if doc, ok := manager.GetDocument(params.TextDocument.URI); ok {
-			newTree := parser.Parse(bts, nil)
-			if newTree == nil {
-				return ErrInvalidTree
-			}
-
-			_, err := manager.SwapTree(doc, newTree, bts)
-
+			_, err := manager.SwapTree(doc, bts)
 			return errors.Join(ErrInvalidTree, err)
 		}
 
@@ -54,8 +48,6 @@ func TextDocumentDidOpenWrapper(manager *runtime.Manager) protocol.TextDocumentD
 
 func TextDocumentDidChangeFuncWrapper(manager *runtime.Manager) protocol.TextDocumentDidChangeFunc {
 	return func(context *glsp.Context, params *protocol.DidChangeTextDocumentParams) error {
-		parser := manager.Parser
-
 		doc, ok := manager.GetDocument(params.TextDocument.URI)
 		if !ok {
 			return ErrInvalidDoc
@@ -90,9 +82,8 @@ func TextDocumentDidChangeFuncWrapper(manager *runtime.Manager) protocol.TextDoc
 
 				doc.Tree.Edit(&editInput)
 				newText := ParseNewBytes(doc.Text, insertBytes, startByteOffset, endByteOffset)
-				newTree := parser.Parse(newText, doc.Tree)
 
-				_, err := manager.SwapTree(doc, newTree, newText)
+				_, err := manager.SwapTree(doc, newText)
 				if err != nil {
 					return errors.Join(ErrInvalidTree, err)
 				}
@@ -100,11 +91,8 @@ func TextDocumentDidChangeFuncWrapper(manager *runtime.Manager) protocol.TextDoc
 
 			if event, ok := change.(protocol.TextDocumentContentChangeEventWhole); ok {
 				bts := []byte(event.Text)
-				newTree := parser.Parse(bts, nil)
-
-				_, err := manager.SwapTree(doc, newTree, bts)
+				_, err := manager.SwapTree(doc, bts)
 				if err != nil {
-					newTree.Close()
 					return errors.Join(ErrInvalidTree, err)
 				}
 			}

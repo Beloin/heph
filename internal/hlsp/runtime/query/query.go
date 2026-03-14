@@ -193,6 +193,10 @@ func ExtractVariables(tree *tree_sitter.Tree, text []byte, source string) ([]*sy
 			case "var.comment":
 				currSymbol.DocString = sanitizeComment(patternValue)
 			case "var.value":
+				if t := symbol.ResolveType(capture.Node.Kind()); t != nil {
+					currSymbol.Type = *t
+				}
+
 				currSymbol.Value = patternValue
 
 				// Last capture group
@@ -207,6 +211,7 @@ func ExtractVariables(tree *tree_sitter.Tree, text []byte, source string) ([]*sy
 
 	return vars, nil
 }
+
 
 func sanitizeComment(cmmt string) string {
 	if cmmt, ok := strings.CutPrefix(cmmt, "#"); ok {

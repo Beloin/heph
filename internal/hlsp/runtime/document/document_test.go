@@ -58,10 +58,7 @@ func (s *DocumentTestSuite) TestSwapTree() {
 
 new_variable = 42`)
 
-	newTree := parser.Parse(newContent, nil)
-	s.Require().NotNil(newTree)
-
-	oldTree, err := doc.SwapTree(newTree, newContent)
+	oldTree, err := doc.SwapTree(parser, newContent)
 	s.Require().NoError(err)
 	s.Require().NotNil(oldTree)
 

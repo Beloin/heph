@@ -63,8 +63,8 @@ func NewSymbolFromTargetSchema(resp *pluginv1.ConfigResponse) (*symbol.Symbol, e
 			sigBuilder.WriteString(", ")
 		}
 		sigBuilder.WriteString(p.Name)
-		if p.Type != nil && p.Type.Name != "" {
-			sigBuilder.WriteString(":" + p.Type.Name)
+		if p.Type.IsKnown() {
+			sigBuilder.WriteString(":" + p.Type.String())
 		}
 	}
 	sigBuilder.WriteString(")")

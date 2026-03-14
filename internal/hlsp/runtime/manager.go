@@ -33,6 +33,7 @@ type docTuple struct {
 type Manager struct {
 	DocumentMap sync.Map
 
+	// TODO: Use builtin directly instead
 	BuiltinSymbols []*symbol.Symbol
 	Parser         *tree_sitter.Parser
 
@@ -82,8 +83,8 @@ func (m *Manager) NewDocument(name string, tree *tree_sitter.Tree, rawText []byt
 	return newDoc, nil
 }
 
-func (m *Manager) SwapTree(doc *document.Document, newT *tree_sitter.Tree, newText []byte) (*tree_sitter.Tree, error) {
-	t, err := doc.SwapTree(newT, newText)
+func (m *Manager) SwapTree(doc *document.Document, newText []byte) (*tree_sitter.Tree, error) {
+	t, err := doc.SwapTree(m.Parser, newText)
 	if err != nil {
 		return nil, err
 	}

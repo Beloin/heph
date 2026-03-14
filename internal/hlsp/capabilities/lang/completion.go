@@ -2,6 +2,7 @@ package lang
 
 import (
 	"github.com/hephbuild/heph/internal/hlsp/runtime"
+	"github.com/hephbuild/heph/internal/hlsp/runtime/builtin"
 	"github.com/hephbuild/heph/internal/hlsp/runtime/document"
 	"github.com/hephbuild/heph/internal/hlsp/runtime/symbol"
 	"github.com/tliron/commonlog"
@@ -17,15 +18,21 @@ func TextDocumentCompletionFuncWrapper(manager *runtime.Manager) protocol.TextDo
 
 		if doc, found := manager.GetDocument(params.TextDocument.URI); found {
 			byteOffset := params.Position.IndexIn(doc.TextString)
+			offset := uint(byteOffset)
 
-			// If is function we can get args completion
-			funName := doc.ExtractCurrentFunctionName(uint(byteOffset))
-			if s, found := manager.Query(funName); found {
-				if s.Is(symbol.FunctionKind) || s.Is(symbol.FunctionCallKind) || s.Is(symbol.TargetCallKind) {
-					args := s.Parameters
-					if args != nil {
-						// TODO: bsena; If is a target?
-						completionItems = createCompletionItemForArgs(args, s)
+			funName := doc.ExtractCurrentFunctionName(offset)
+
+			// If inside a target() call, use the driver-resolved schema for arg completion
+			if funName == builtin.TargetName {
+				if s := doc.QueryClosestTarget(offset); s != nil {
+					completionItems = createCompletionItemForArgs(s.Parameters, s)
+				}
+			} else { // Do not fallback to builtins
+				if s, found := manager.Query(funName); found {
+					if s.Is(symbol.FunctionKind) || s.Is(symbol.FunctionCallKind) {
+						if s.Parameters != nil {
+							completionItems = createCompletionItemForArgs(s.Parameters, s)
+						}
 					}
 				}
 			}
@@ -46,7 +53,6 @@ func TextDocumentCompletionFuncWrapper(manager *runtime.Manager) protocol.TextDo
 					}
 				}
 			})
-
 		}
 
 		// Load Builtin

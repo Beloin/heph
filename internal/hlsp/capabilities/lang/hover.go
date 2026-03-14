@@ -77,8 +77,12 @@ func createHover(sym *symbol.Symbol) *protocol.Hover {
 	sb.WriteString("\n---\n")
 
 	if sym.Is(symbol.VariableKind) {
-		varSignature := langDecorateMultiline(sym.Name+" = "+sym.Value, runtime.HephLanguage)
-		sb.WriteString(varSignature)
+		sig := sym.Name
+		if sym.Type.IsKnown() {
+			sig += ":" + sym.Type.String()
+		}
+		sig += " = " + sym.Value
+		sb.WriteString(langDecorateMultiline(sig, runtime.HephLanguage))
 	} else {
 		sb.WriteString(langDecorateMultiline(sym.Signature, runtime.HephLanguage))
 	}
@@ -109,8 +113,8 @@ func createArgHover(fn *symbol.Symbol, param *symbol.Parameter) *protocol.Hover 
 
 	sb.WriteString(param.Name)
 
-	if param.Type != nil && param.Type.Name != "" {
-		sb.WriteString(":" + param.Type.Name)
+	if param.Type.IsKnown() {
+		sb.WriteString(":" + param.Type.String())
 	}
 
 	if param.Value != "" {

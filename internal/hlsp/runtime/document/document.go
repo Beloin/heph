@@ -2,6 +2,7 @@ package document
 
 import (
 	"context"
+	"errors"
 	"slices"
 	"strings"
 	"sync"
@@ -35,11 +36,14 @@ type Document struct {
 	Text       []byte // UTF-16 encoded byte array https://microsoft.github.io/language-server-protocol/specifications/specification-3-16/#textDocuments
 	TextString string // UTF-16 encoded string https://microsoft.github.io/language-server-protocol/specifications/specification-3-16/#textDocuments
 
+	// TODO: bsena; this is a stop-the-world mutex, rename it
 	treeMutex sync.Mutex
 	loadsMu   sync.RWMutex
 
 	drivers *driver.Registry
 }
+
+var ErrParseFailed = errors.New("parse failed")
 
 type RawLoad struct {
 	Path  string
@@ -94,10 +98,17 @@ func NewDocument(name string, tree *tree_sitter.Tree, rawText []byte, drivers *d
 	return doc, err
 }
 
-// SwapTree atomic swaps current tree and return the closed old tree
-func (d *Document) SwapTree(newT *tree_sitter.Tree, newText []byte) (*tree_sitter.Tree, error) {
+// SwapTree parses newText (using d.Tree as base for incremental parsing), then atomically
+// swaps the current tree and returns the closed old tree.
+func (d *Document) SwapTree(parser *tree_sitter.Parser, newText []byte) (*tree_sitter.Tree, error) {
 	d.treeMutex.Lock()
 	defer d.treeMutex.Unlock()
+
+	newT := parser.Parse(newText, d.Tree)
+	if newT == nil {
+		return nil, ErrParseFailed
+	}
+
 
 	oldTree := d.Tree
 
@@ -140,6 +151,7 @@ func (d *Document) extractTargets() {
 		// Ignore any invalid driver
 		if driverName == "" {
 			defaultTarget := *btTarget
+			defaultTarget.Position = call.Position
 			resolved = append(resolved, &defaultTarget)
 
 			continue
@@ -268,6 +280,7 @@ func (d *Document) QueryType(name string) (*symbol.Type, bool) {
 		return p, true
 	}
 
+	// TODO: bsena; Why this?
 	if s, found := symbol.FindSymbol(d.Symbols, name); found {
 		return &s.Type, true
 	}
