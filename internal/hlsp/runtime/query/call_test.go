@@ -123,6 +123,41 @@ func (suite *CallQuerySuite) TestExtractFunctions() {
 	suite.Require().Equal("[]", myFunc.Parameters[2].Value)
 }
 
+func (suite *CallQuerySuite) TestCallsInsideFunction() {
+	parser := suite.newParser()
+	pythonTree := parser.Parse(callTest, nil)
+
+	funs, err := query.ExtractFunctions(pythonTree, callTest, "")
+	suite.Require().NoError(err)
+
+	calls, err := query.ExtractCalls(pythonTree, callTest, "", funs)
+	suite.Require().NoError(err)
+
+	// Top-level calls should not include inner_call or another_inner_call
+	topLevelNames := []string{}
+	for _, s := range calls {
+		topLevelNames = append(topLevelNames, s.Name)
+	}
+	suite.Require().ElementsMatch(expectedFunctionCalls, topLevelNames)
+
+	// inner_call and another_inner_call should be in my_func.Symbols
+	var myFunc *symbol.Symbol
+	for _, f := range funs {
+		if f.Name == "my_func" {
+			myFunc = f
+			break
+		}
+	}
+	suite.Require().NotNil(myFunc, "my_func should be found")
+
+	innerNames := []string{}
+	for _, s := range myFunc.Symbols {
+		innerNames = append(innerNames, s.Name)
+	}
+	suite.Require().Contains(innerNames, "inner_call")
+	suite.Require().Contains(innerNames, "another_inner_call")
+}
+
 func TestCallQuerySuite(t *testing.T) {
 	suite.Run(t, &CallQuerySuite{})
 }

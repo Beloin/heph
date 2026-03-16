@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/hephbuild/heph/internal/hlsp/capabilities/sync"
-	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 )
 

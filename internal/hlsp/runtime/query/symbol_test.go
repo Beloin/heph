@@ -14,6 +14,9 @@ import (
 //go:embed testdata/test_python_symbols.py
 var pythonTestFile []byte
 
+//go:embed testdata/test.py
+var testPy []byte
+
 func findByteOffset(source []byte, searchStr string) int {
 	for i := 0; i < len(source)-len(searchStr); i++ {
 		if string(source[i:i+len(searchStr)]) == searchStr {
@@ -304,6 +307,59 @@ func (s *SymbolTestSuite) TestExtractStringLiteral_OnVariable() {
 	actualSymbol := query.ExtractCurrentStringLiteral(s.root, s.source, byteOffset)
 
 	s.Equal("", actualSymbol, "Should return empty string when cursor is on a variable name")
+}
+
+func (s *SymbolTestSuite) TestSymbolHierarchy_TopLevel() {
+	result, err := query.QueryAll(s.tree, s.source, "")
+	s.Require().NoError(err)
+
+	rootSyms := append(result.Functions, result.Variables...)
+
+	offset := findByteOffset(s.source, "my_variable")
+	s.Require().NotEqual(-1, offset, "Should find 'my_variable' in source")
+
+	hierarchy := query.SymbolHierarchy(s.root, s.source, uint(offset), rootSyms)
+
+	s.Require().NotEmpty(hierarchy)
+	s.Require().Equal("my_variable", hierarchy[len(hierarchy)-1].Name)
+}
+
+func (s *SymbolTestSuite) TestSymbolHierarchy_FunctionVar() {
+	tree := s.parser.Parse(testPy, nil)
+
+	result, err := query.QueryAll(tree, testPy, "")
+	s.Require().NoError(err)
+
+	rootSyms := append(result.Functions, result.Variables...)
+
+	offset := findByteOffset(testPy, "my_other_function_var")
+	s.Require().NotEqual(-1, offset, "Should find 'my_other_function_var' in test.py")
+
+	hierarchy := query.SymbolHierarchy(tree.RootNode(), testPy, uint(offset), rootSyms)
+
+	s.Require().NotEmpty(hierarchy)
+	s.Require().Equal("my_other_function", hierarchy[0].Name)
+	s.Require().Equal("my_other_function_var", hierarchy[len(hierarchy)-1].Name)
+}
+
+func (s *SymbolTestSuite) TestSymbolHierarchy_NestedFunctions() {
+	tree := s.parser.Parse(testPy, nil)
+
+	result, err := query.QueryAll(tree, testPy, "")
+	s.Require().NoError(err)
+
+	rootSyms := append(result.Functions, result.Variables...)
+
+	offset := findByteOffset(testPy, "level4")
+	s.Require().NotEqual(-1, offset, "Should find 'level4' in test.py")
+
+	hierarchy := query.SymbolHierarchy(tree.RootNode(), testPy, uint(offset), rootSyms)
+
+	s.Require().Len(hierarchy, 4)
+	s.Require().Equal("level1", hierarchy[0].Name)
+	s.Require().Equal("level2", hierarchy[1].Name)
+	s.Require().Equal("level3", hierarchy[2].Name)
+	s.Require().Equal("level4", hierarchy[3].Name)
 }
 
 func TestSymbolTestSuite(t *testing.T) {

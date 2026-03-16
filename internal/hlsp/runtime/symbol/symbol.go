@@ -13,15 +13,8 @@ const (
 	FieldKind
 	// PrimitiveKind is used for built-in primitive type sentinels (int, str, bool, …).
 	PrimitiveKind
-)
 
-// TODO: bsena; Maybe we really actually need types
-// Instead of only relying in Kind
-
-// Calls types
-const (
-	FunctionCallKind = iota + 4
-	// TODO: bsena; THIS IS NOT BEING USED
+	FunctionCallKind
 	TargetCallKind
 )
 
@@ -63,6 +56,7 @@ type Symbol struct {
 
 	Parameters []*Parameter
 
+	// TODO: bsena; Maybe value can also be a Symbol, bc we can have a = b
 	// Value is the current literal value for a variable
 	Value     string
 	DocString string
@@ -92,18 +86,17 @@ func FindSymbolInSymbols(parent *Symbol, name string) (*Symbol, bool) {
 	return nil, false
 }
 
-
 // Primitive type sentinels. These are the canonical *Symbol values for built-in types.
 // Parameter.Type and Symbol.Type point to these for primitive types.
 // For user-defined types they point to the class symbol resolved at parse time.
 var (
-	PrimitiveInt    = &Symbol{Name: "int",     Kind: PrimitiveKind}
-	PrimitiveFloat  = &Symbol{Name: "float",   Kind: PrimitiveKind}
-	PrimitiveBool   = &Symbol{Name: "bool",    Kind: PrimitiveKind}
-	PrimitiveNull   = &Symbol{Name: "Null",    Kind: PrimitiveKind}
-	PrimitiveString = &Symbol{Name: "str",     Kind: PrimitiveKind}
-	DictType        = &Symbol{Name: "dict",    Kind: PrimitiveKind}
-	ListType        = &Symbol{Name: "list",    Kind: PrimitiveKind}
-	ObjectType      = &Symbol{Name: "object",  Kind: PrimitiveKind}
+	PrimitiveInt    = &Symbol{Name: "int", Kind: PrimitiveKind}
+	PrimitiveFloat  = &Symbol{Name: "float", Kind: PrimitiveKind}
+	PrimitiveBool   = &Symbol{Name: "bool", Kind: PrimitiveKind}
+	PrimitiveNull   = &Symbol{Name: "Null", Kind: PrimitiveKind}
+	PrimitiveString = &Symbol{Name: "str", Kind: PrimitiveKind}
+	DictType        = &Symbol{Name: "dict", Kind: PrimitiveKind}
+	ListType        = &Symbol{Name: "list", Kind: PrimitiveKind}
+	ObjectType      = &Symbol{Name: "object", Kind: PrimitiveKind}
 	UnknownType     = &Symbol{Name: "unknown", Kind: PrimitiveKind}
 )

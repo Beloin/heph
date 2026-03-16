@@ -16,7 +16,7 @@ import (
 var pythonTest []byte
 
 var (
-	functionNames = []string{"my_custom_function", "my_other_function", "my_argless_function", "my_documented_function"}
+	functionNames = []string{"my_custom_function", "my_other_function", "my_argless_function", "my_documented_function", "level1"}
 	testVariables = []string{"my_custom_variable", "my_new_var", "my_custom_result"}
 )
 
@@ -139,6 +139,41 @@ func (suite *QuerySuite) TestFunctionArgsDoc() {
 	suite.Require().Equal("int", documentedFunc.Parameters[1].Type.Name)
 	suite.Require().Equal("The second parameter. Defaults to 0.", documentedFunc.Parameters[1].DocString)
 	suite.Require().Equal("0", documentedFunc.Parameters[1].Value)
+}
+
+func (suite *QuerySuite) TestNestedFunctions() {
+	parser := suite.newParser()
+	pythonTree := parser.Parse(pythonTest, nil)
+
+	symbols, err := query.ExtractFunctions(pythonTree, pythonTest, "")
+	suite.Require().NoError(err)
+
+	var level1 *symbol.Symbol
+	for _, s := range symbols {
+		if s.Name == "level1" {
+			level1 = s
+			break
+		}
+	}
+	suite.Require().NotNil(level1, "level1 should be a top-level function")
+
+	level2 := findSymbolInSlice(level1.Symbols, "level2")
+	suite.Require().NotNil(level2, "level2 should be nested in level1")
+
+	level3 := findSymbolInSlice(level2.Symbols, "level3")
+	suite.Require().NotNil(level3, "level3 should be nested in level2")
+
+	level4 := findSymbolInSlice(level3.Symbols, "level4")
+	suite.Require().NotNil(level4, "level4 should be nested in level3")
+}
+
+func findSymbolInSlice(syms []*symbol.Symbol, name string) *symbol.Symbol {
+	for _, s := range syms {
+		if s.Name == name {
+			return s
+		}
+	}
+	return nil
 }
 
 func TestQuerySuite(t *testing.T) {

@@ -5,7 +5,8 @@ print("My Load")
 my_other_call(arg1, kwarg1="literal", kwarg2=12)
 
 def my_func(param1: str, param2: Union[str, int], param3: List[str] = []):
-    pass
+    inner_call(param1, kwarg="value")
+    another_inner_call()
 
 fun_no_args()
 

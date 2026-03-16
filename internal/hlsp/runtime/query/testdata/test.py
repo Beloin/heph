@@ -8,6 +8,7 @@ def my_custom_function(arg1: str, arg2) -> str:
 
 
 def my_other_function(arg1, arg2, arg3=12, arg4: str = "abc"):
+    my_other_function_var = 12
     pass
 
 
@@ -41,3 +42,10 @@ print(22)
 
 
 heph.inner.fun()
+
+
+def level1():
+    def level2():
+        def level3():
+            def level4():
+                pass

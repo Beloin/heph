@@ -61,25 +61,57 @@ var lang = tree_sitter.NewLanguage(tree_sitter_python.Language())
 // TODO: Maybe create a query that query all symbols of type object
 // so we can match heph.myfun
 
+// QueryResult holds the three categories of symbols extracted from a tree.
+type QueryResult struct {
+	Functions []*symbol.Symbol
+	Variables []*symbol.Symbol
+	Calls     []*symbol.Symbol
+}
+
+// QueryAll extracts functions, variables, and calls in one pass, with full
+// scope awareness: variables and calls inside a function body are attached to
+// that function's Symbols field.
+func QueryAll(tree *tree_sitter.Tree, text []byte, source string) (*QueryResult, error) {
+	funs, err := ExtractFunctions(tree, text, source)
+	if err != nil {
+		return nil, err
+	}
+
+	vars, err := ExtractVariables(tree, text, source, funs)
+	if err != nil {
+		return nil, err
+	}
+
+	calls, err := ExtractCalls(tree, text, source, funs)
+	if err != nil {
+		return nil, err
+	}
+
+	return &QueryResult{
+		Functions: funs,
+		Variables: vars,
+		Calls:     calls,
+	}, nil
+}
+
 func QuerySymbols(tree *tree_sitter.Tree, text []byte, source string) ([]*symbol.Symbol, error) {
-	symbols := []*symbol.Symbol{}
-
-	funcSymbols, err := ExtractFunctions(tree, text, source)
+	result, err := QueryAll(tree, text, source)
 	if err != nil {
 		return nil, err
 	}
-	symbols = append(symbols, funcSymbols...)
 
-	varSymbols, err := ExtractVariables(tree, text, source, funcSymbols)
-	if err != nil {
-		return nil, err
-	}
-	symbols = append(symbols, varSymbols...)
+	return append(result.Functions, result.Variables...), nil
+}
 
-	return symbols, nil
+// Necessary to do a re-run to get functions that are nested.
+type funcEntry struct {
+	sym     *symbol.Symbol
+	defNode *tree_sitter.Node
 }
 
 // ExtractFunctions extracts function symbols from the tree.
+// Nested functions (functions defined inside another function) are attached to
+// their parent function's Symbols field rather than returned at the top level.
 func ExtractFunctions(tree *tree_sitter.Tree, text []byte, source string) ([]*symbol.Symbol, error) {
 	if tree.RootNode() == nil {
 		return nil, ErrEmptyTreeError
@@ -97,10 +129,10 @@ func ExtractFunctions(tree *tree_sitter.Tree, text []byte, source string) ([]*sy
 
 	matches := cursor.Matches(query, tree.RootNode(), text)
 
-	funs := map[uintptr]*symbol.Symbol{}
+	entries := map[uintptr]*funcEntry{}
 
 	for match := matches.Next(); match != nil; match = matches.Next() {
-		currSymbol := &symbol.Symbol{Kind: symbol.FunctionKind, Source: source}
+		currEntry := &funcEntry{sym: &symbol.Symbol{Kind: symbol.FunctionKind, Source: source}}
 		var currParam *symbol.Parameter
 		for _, capture := range match.Captures {
 			currentNode := &capture.Node
@@ -111,26 +143,27 @@ func ExtractFunctions(tree *tree_sitter.Tree, text []byte, source string) ([]*sy
 			switch patternName {
 			case "function.name":
 				// Params query repeats Captures. We use Function Name as id so we dont need to make multiple queries
-				if ss, ok := funs[currentNode.Id()]; ok {
-					ss.Parameters = append(ss.Parameters, currSymbol.Parameters...)
-					currSymbol = ss
+				if e, ok := entries[currentNode.Id()]; ok {
+					e.sym.Parameters = append(e.sym.Parameters, currEntry.sym.Parameters...)
+					currEntry = e
 				}
 
 				// First capture group
-				currSymbol.Position.RowStart = nodeRange.StartPoint.Row
-				currSymbol.Position.ColumnStart = nodeRange.StartPoint.Column
-				currSymbol.Position.ByteStart = nodeRange.StartByte
+				currEntry.sym.Position.RowStart = nodeRange.StartPoint.Row
+				currEntry.sym.Position.ColumnStart = nodeRange.StartPoint.Column
+				currEntry.sym.Position.ByteStart = nodeRange.StartByte
 
-				currSymbol.Name = patternValue
-				currSymbol.Signature = patternValue + "()" // empty params is the default
-				currSymbol.FullyQualifiedName = patternValue
+				currEntry.sym.Name = patternValue
+				currEntry.sym.Signature = patternValue + "()" // empty params is the default
+				currEntry.sym.FullyQualifiedName = patternValue
+				currEntry.defNode = currentNode.Parent() // function_definition
 
-				funs[currentNode.Id()] = currSymbol
+				entries[currentNode.Id()] = currEntry
 			case "function.params":
-				currSymbol.Signature = currSymbol.Name + patternValue
+				currEntry.sym.Signature = currEntry.sym.Name + patternValue
 			case "function.param":
 				currParam = &symbol.Parameter{Name: patternValue}
-				currSymbol.Parameters = append(currSymbol.Parameters, currParam)
+				currEntry.sym.Parameters = append(currEntry.sym.Parameters, currParam)
 			case "function.param.type":
 				if currParam != nil {
 					currParam.Type = ResolveType(patternValue)
@@ -140,19 +173,42 @@ func ExtractFunctions(tree *tree_sitter.Tree, text []byte, source string) ([]*sy
 					currParam.Value = patternValue
 				}
 			case "function.docstring":
-				currSymbol.DocString = sanitizeComment(patternValue)
+				currEntry.sym.DocString = sanitizeComment(patternValue)
 
 				// Last capture group
-				currSymbol.Position.RowEnd = nodeRange.EndPoint.Row
-				currSymbol.Position.ColumnEnd = nodeRange.EndPoint.Column
-				currSymbol.Position.ByteEnd = nodeRange.EndByte
+				currEntry.sym.Position.RowEnd = nodeRange.EndPoint.Row
+				currEntry.sym.Position.ColumnEnd = nodeRange.EndPoint.Column
+				currEntry.sym.Position.ByteEnd = nodeRange.EndByte
 			}
 		}
 
-		parseArgsFromDocstring(currSymbol.DocString, currSymbol.Parameters)
+		parseArgsFromDocstring(currEntry.sym.DocString, currEntry.sym.Parameters)
 	}
 
-	return slices.Collect(maps.Values(funs)), nil
+	// Build a name->entry map for parent lookup.
+	entryByName := map[string]*funcEntry{}
+	for _, e := range entries {
+		entryByName[e.sym.Name] = e
+	}
+
+	// Second pass: attach nested functions to their parent's Symbols.
+	topLevel := []*symbol.Symbol{}
+	for _, entry := range slices.Collect(maps.Values(entries)) {
+		parentNameNode := getFunctionNameNodeIfExists(entry.defNode.Parent())
+		if parentNameNode == nil {
+			topLevel = append(topLevel, entry.sym)
+			continue
+		}
+
+		parentName := parentNameNode.Utf8Text(text)
+		if parentEntry, ok := entryByName[parentName]; ok {
+			parentEntry.sym.Symbols = append(parentEntry.sym.Symbols, entry.sym)
+		} else {
+			topLevel = append(topLevel, entry.sym)
+		}
+	}
+
+	return topLevel, nil
 }
 
 func ExtractVariables(tree *tree_sitter.Tree, text []byte, source string, funs []*symbol.Symbol) ([]*symbol.Symbol, error) {

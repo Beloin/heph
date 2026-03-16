@@ -88,6 +88,52 @@ func WhereAmI(root *tree_sitter.Node, source []byte, byteOffSet uint) CodeLocati
 	return RootLocation
 }
 
+// SymbolHierarchy converts a node-position hierarchy to a Symbol hierarchy.
+// It descends the AST following byteOffset, and at each identifier or
+// function_definition node looks up the name in rootSyms. If found, the symbol
+// is appended to the result and the search narrows to that symbol's sub-symbols
+// for the next level.
+func SymbolHierarchy(root *tree_sitter.Node, source []byte, byteOffSet uint, rootSyms []*symbol.Symbol) []*symbol.Symbol {
+	var hierarchySymbols []*symbol.Symbol
+	for child := root.FirstChildForByte(byteOffSet); child != nil; child = child.FirstChildForByte(byteOffSet) {
+		root = child
+
+		name := ""
+		if child.Kind() == "identifier" {
+			name = child.Utf8Text(source)
+		} else if child.Kind() == "function_definition" {
+			if nameNode := child.ChildByFieldName("name"); nameNode != nil {
+				name = nameNode.Utf8Text(source)
+			}
+		}
+
+		if name == "" {
+			continue
+		}
+
+		var s *symbol.Symbol
+		for _, sym := range rootSyms {
+			if sym.Name != name {
+				continue
+			}
+			if sym.Position.ByteStart > byteOffSet {
+				continue
+			}
+			if s == nil || sym.Position.ByteStart > s.Position.ByteStart {
+				s = sym
+			}
+		}
+		if s == nil {
+			break
+		}
+
+		hierarchySymbols = append(hierarchySymbols, s)
+		rootSyms = s.Symbols
+	}
+
+	return hierarchySymbols
+}
+
 // ExtractFunctionNameFromOffset extracts closest current function name whether its a call or definition
 func ExtractFunctionNameFromOffset(root *tree_sitter.Node, source []byte, byteOffSet uint) string {
 	childLookup := ""

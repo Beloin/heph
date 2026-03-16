@@ -8,10 +8,13 @@ import (
 	"github.com/hephbuild/heph/internal/hlsp/runtime/builtin"
 	"github.com/hephbuild/heph/internal/hlsp/runtime/query"
 	"github.com/hephbuild/heph/internal/hlsp/runtime/symbol"
+	"github.com/tliron/commonlog"
 	"github.com/tliron/glsp"
 
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
+
+var hoverLog = commonlog.GetLogger("hover")
 
 func TextDocumentHoverFuncWrapper(manager *runtime.Manager) protocol.TextDocumentHoverFunc {
 	return func(glspContext *glsp.Context, params *protocol.HoverParams) (*protocol.Hover, error) {
@@ -30,8 +33,25 @@ func TextDocumentHoverFuncWrapper(manager *runtime.Manager) protocol.TextDocumen
 		// TODO: bsena; this does not get builtin like heph.pkg.addr
 
 		// TODO: bsena; We need to find a way to get vars from inside a function
-
 		symbolName := doc.ExtractCurrentSymbolName(uint(bytePos))
+
+		hierarchy := doc.SymbolHierarchy(uint(bytePos))
+		hierarchyNames := make([]string, len(hierarchy))
+		for i, s := range hierarchy {
+			hierarchyNames[i] = s.Name
+		}
+		hoverLog.Debugf("hierarchy: %s", strings.Join(hierarchyNames, " -> "))
+
+		for i := len(hierarchy) - 1; i >= 0; i-- {
+			current := hierarchy[i]
+			if current.Kind == symbol.FunctionCallKind {
+				continue
+			}
+
+			if current.Name == symbolName {
+				return createHover(current), nil
+			}
+		}
 
 		if symbolName == builtin.TargetName {
 			if s := doc.QueryClosestTarget(uint(bytePos)); s != nil {
@@ -70,6 +90,10 @@ func TextDocumentHoverFuncWrapper(manager *runtime.Manager) protocol.TextDocumen
 					}
 				}
 			}
+
+			// Actually I think we should do something smarter
+			// maybe go through all nodes and extracting the parent symbol
+
 		}
 
 		if s, found := doc.Query(funName); found {

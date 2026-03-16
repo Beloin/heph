@@ -35,18 +35,19 @@ func NewSymbolFromTargetSchema(resp *pluginv1.ConfigResponse) (*symbol.Symbol, e
 
 	sym := &symbol.Symbol{
 		Name: builtin.TargetName,
-		Kind: symbol.FunctionKind,
+		Kind: symbol.FunctionKind, // TODO: bsena; Use targetCallkind
 	}
 
 	// Start with builtin target params (name, deps, out, etc.) if available.
-	var builtinParams []*symbol.Parameter
-	if targets := builtin.GetTarget(); len(targets) > 0 {
-		builtinParams = targets[0].Parameters
-	}
+	// var builtinParams []*symbol.Parameter
+	// if targets := builtin.GetTarget(); len(targets) > 0 {
+	// 	builtinParams = targets[0].Parameters
+	// }
+	btTarget := builtin.GetTarget()[0] // TODO: bsena; make target return only eone
 
 	fields := schema.GetField()
-	params := make([]*symbol.Parameter, 0, len(builtinParams)+len(fields))
-	params = append(params, builtinParams...)
+	params := make([]*symbol.Parameter, 0, len(btTarget.Parameters)+len(fields))
+	params = append(params, btTarget.Parameters...)
 
 	for _, f := range fields {
 		params = append(params, &symbol.Parameter{
@@ -70,6 +71,7 @@ func NewSymbolFromTargetSchema(resp *pluginv1.ConfigResponse) (*symbol.Symbol, e
 	sigBuilder.WriteString(")")
 	sym.Parameters = params
 	sym.Signature = sigBuilder.String()
+	sym.DocString = btTarget.DocString
 	sym.Source = resp.GetName()
 
 	return sym, nil

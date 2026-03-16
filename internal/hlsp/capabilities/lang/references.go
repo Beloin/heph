@@ -30,6 +30,8 @@ func TextDocumentReferencesFuncWrapper(manager *runtime.Manager) protocol.TextDo
 func findReferences(doc *document.Document, symbolName string) []protocol.Location {
 	var locations []protocol.Location
 
+	// TODO: bsena; Query for all things, but make sure to respect scopes
+
 	// Find references in the doc itself
 	if calls := doc.QueryCalls(symbolName); len(calls) > 0 {
 		for _, sym := range calls {

@@ -13,9 +13,16 @@ const callQuery = `
 (call function: (identifier) @call.name . (argument_list (_) @call.arg)? ) @call.stmt
 `
 
-// TODO: bsena; Later we can query for return type...
+// Necessary to do a re-run to get calls that are nested in functions.
+type callEntry struct {
+	sym      *symbol.Symbol
+	stmtNode *tree_sitter.Node
+}
 
-func QueryCalls(tree *tree_sitter.Tree, text []byte, source string) ([]*symbol.Symbol, error) {
+// ExtractCalls extracts function call symbols from the tree.
+// If funs is provided, calls made inside a function body are attached to that
+// function's Symbols field instead of being returned at the top level.
+func ExtractCalls(tree *tree_sitter.Tree, text []byte, source string, funs []*symbol.Symbol) ([]*symbol.Symbol, error) {
 	if tree.RootNode() == nil {
 		return nil, ErrEmptyTreeError
 	}
@@ -30,10 +37,10 @@ func QueryCalls(tree *tree_sitter.Tree, text []byte, source string) ([]*symbol.S
 	defer cursor.Close()
 
 	matches := cursor.Matches(query, tree.RootNode(), text)
-	funs := map[uintptr]*symbol.Symbol{}
+	entries := map[uintptr]*callEntry{}
 
 	for match := matches.Next(); match != nil; match = matches.Next() {
-		currSymbol := &symbol.Symbol{Kind: symbol.FunctionCallKind, Source: source}
+		currEntry := &callEntry{sym: &symbol.Symbol{Kind: symbol.FunctionCallKind, Source: source}}
 		for _, capture := range match.Captures {
 			currentNode := &capture.Node
 			patternName := query.CaptureNames()[capture.Index]
@@ -43,20 +50,20 @@ func QueryCalls(tree *tree_sitter.Tree, text []byte, source string) ([]*symbol.S
 			switch patternName {
 			case "call.name":
 				// Params query repeats Captures. We use NodeId so we dont need to make multiple queries
-				if ss, ok := funs[currentNode.Id()]; ok {
-					ss.Parameters = append(ss.Parameters, currSymbol.Parameters...)
-					currSymbol = ss
+				if e, ok := entries[currentNode.Id()]; ok {
+					e.sym.Parameters = append(e.sym.Parameters, currEntry.sym.Parameters...)
+					currEntry = e
 				}
 
-				currSymbol.Name = patternValue
-				currSymbol.FullyQualifiedName = patternValue
-				currSymbol.Position.RowStart = nodeRange.StartPoint.Row
-				currSymbol.Position.ColumnStart = nodeRange.StartPoint.Column
-				currSymbol.Position.ByteStart = nodeRange.StartByte
+				currEntry.sym.Name = patternValue
+				currEntry.sym.FullyQualifiedName = patternValue
+				currEntry.sym.Position.RowStart = nodeRange.StartPoint.Row
+				currEntry.sym.Position.ColumnStart = nodeRange.StartPoint.Column
+				currEntry.sym.Position.ByteStart = nodeRange.StartByte
 
-				funs[currentNode.Id()] = currSymbol
+				entries[currentNode.Id()] = currEntry
 			case "call.arg":
-				newParam := symbol.Parameter{Name: strconv.Itoa(len(currSymbol.Parameters)), Value: patternValue}
+				newParam := symbol.Parameter{Name: strconv.Itoa(len(currEntry.sym.Parameters)), Value: patternValue}
 
 				// Is kwarg
 				if currentNode.Kind() == "keyword_argument" {
@@ -69,17 +76,38 @@ func QueryCalls(tree *tree_sitter.Tree, text []byte, source string) ([]*symbol.S
 					}
 				}
 
-				currSymbol.Parameters = append(currSymbol.Parameters, &newParam)
+				currEntry.sym.Parameters = append(currEntry.sym.Parameters, &newParam)
 
 				// Last pattern
-				currSymbol.Position.RowEnd = nodeRange.EndPoint.Row
-				currSymbol.Position.ColumnEnd = nodeRange.EndPoint.Column
+				currEntry.sym.Position.RowEnd = nodeRange.EndPoint.Row
+				currEntry.sym.Position.ColumnEnd = nodeRange.EndPoint.Column
 			case "call.stmt":
-				currSymbol.Signature = patternValue
-				currSymbol.Position.ByteEnd = nodeRange.EndByte
+				currEntry.sym.Signature = patternValue
+				currEntry.sym.Position.ByteEnd = nodeRange.EndByte
+				currEntry.stmtNode = currentNode
 			}
 		}
 	}
 
-	return slices.Collect(maps.Values(funs)), nil
+	topLevel := []*symbol.Symbol{}
+	for _, entry := range slices.Collect(maps.Values(entries)) {
+		if funs != nil && entry.stmtNode != nil {
+			if nameNode := getFunctionNameNodeIfExists(entry.stmtNode); nameNode != nil {
+				funcName := nameNode.Utf8Text(text)
+				if fn, found := symbol.FindSymbol(funs, funcName); found {
+					fn.Symbols = append(fn.Symbols, entry.sym)
+					continue
+				}
+			}
+		}
+
+		topLevel = append(topLevel, entry.sym)
+	}
+
+	return topLevel, nil
+}
+
+// QueryCalls is a convenience wrapper that returns all calls without scope awareness.
+func QueryCalls(tree *tree_sitter.Tree, text []byte, source string) ([]*symbol.Symbol, error) {
+	return ExtractCalls(tree, text, source, nil)
 }

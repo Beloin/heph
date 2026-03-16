@@ -22,6 +22,9 @@ type Document struct {
 	FullPath string
 
 	Symbols []*symbol.Symbol
+	// TODO: bsena; We probably need to remove this since we will going
+	// all the way down from symbol scope
+	// So just add all this to the Symbols array
 	Calls   []*symbol.Symbol
 	Targets []*symbol.Symbol
 
@@ -93,7 +96,8 @@ func NewDocument(name string, tree *tree_sitter.Tree, rawText []byte, drivers *d
 	doc.Calls = calls
 	doc.Targets = targets
 	doc.extractLoads()
-	go doc.extractTargets()
+	// go doc.extractTargets()
+	go doc.extractTargets2()
 
 	return doc, err
 }
@@ -125,7 +129,8 @@ func (d *Document) SwapTree(parser *tree_sitter.Parser, newText []byte) (*tree_s
 
 	d.resetLoads()
 	d.extractLoads()
-	go d.extractTargets()
+	// go d.extractTargets()
+	go d.extractTargets2()
 
 	oldTree.Close()
 
@@ -189,6 +194,56 @@ func (d *Document) extractTargets() {
 	d.Targets = resolved
 }
 
+// extractTargets2 will add information to targets recursively
+func (d *Document) extractTargets2() {
+	d.treeMutex.Lock()
+	defer d.treeMutex.Unlock()
+
+	btTarget := builtin.GetTarget()[0]
+
+	d.enrichTargets(d.Symbols, btTarget)
+	d.enrichTargets(d.Calls, btTarget)
+}
+
+func (d *Document) enrichTargets(syms []*symbol.Symbol, btTarget *symbol.Symbol) {
+	for _, s := range syms {
+		if s.Kind == symbol.FunctionKind {
+			d.enrichTargets(s.Symbols, btTarget)
+			continue
+		}
+
+		if s.Name != builtin.TargetName {
+			continue
+		}
+
+		s.Kind = symbol.TargetCallKind
+		s.DocString = btTarget.DocString
+
+		var driverName string
+		for _, p := range s.Parameters {
+			if p.Name == builtin.DriverName {
+				driverName = strings.Trim(p.Value, "\"'")
+				break
+			}
+		}
+
+		if driverName == "" {
+			s.DocString = btTarget.DocString
+
+			continue
+		}
+
+		if schema, found := d.getDriverSchema(driverName); found {
+			s.Source = schema.Source
+			s.Signature = schema.Signature
+			s.Parameters = schema.Parameters
+			s.DocString = schema.DocString
+		} else {
+			s.Signature += " // driver `" + driverName + "` not found"
+		}
+	}
+}
+
 func (d *Document) getDriverSchema(driverName string) (*symbol.Symbol, bool) {
 	if drv, ok := d.drivers.GetDriver(driverName); ok {
 		ctx, cancel := context.WithTimeout(context.TODO(), 200*time.Millisecond)
@@ -204,33 +259,34 @@ func (d *Document) getDriverSchema(driverName string) (*symbol.Symbol, bool) {
 }
 
 func extractSymbols(tree *tree_sitter.Tree, text []byte, source string) ([]*symbol.Symbol, []*symbol.Symbol, []*symbol.Symbol, error) {
-	symbols, err := query.QuerySymbols(tree, text, source)
-	if err != nil {
-		return nil, nil, nil, err
-	}
-
 	// TODO: bsena; Someone is updating tree/text withou waiting for this query
-	allCalls, err := query.QueryCalls(tree, text, source)
+	result, err := query.QueryAll(tree, text, source)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	var calls, targets []*symbol.Symbol
-	for _, call := range allCalls {
-		if call.Name == builtin.TargetName {
-			call.Kind = symbol.TargetCallKind
-			targets = append(targets, call)
-		} else {
-			calls = append(calls, call)
-		}
-	}
+	// TODO: bsena; add all inside all symbols
+	symbols := append(result.Functions, result.Variables...)
+	symbols = append(symbols, result.Calls...)
 
-	return symbols, calls, targets, err
+	// Target calls are special calls
+	// TODO: bsena; Maybe do this to groups also?
+	var calls, targets []*symbol.Symbol
+	// for _, call := range result.Calls {
+	// 	if call.Name == builtin.TargetName {
+	// 		// call.Kind = symbol.TargetCallKind
+	// 		calls = append(targets, call)
+	// 	} else {
+	// 		calls = append(calls, call)
+	// 	}
+	// }
+
+	return symbols, calls, targets, nil
 }
 
 func (d *Document) extractLoads() {
 	loads := []*RawLoad{}
-	for _, call := range d.Calls {
+	for _, call := range d.Symbols {
 		if call.Name == builtin.LoadName {
 			if len(call.Parameters) < 2 {
 				continue
@@ -267,6 +323,19 @@ func (d *Document) ExtractCurrentSymbolName(byteOffSet uint) string {
 
 func (d *Document) WhereAmI(byteOffSet uint) query.CodeLocation {
 	return query.WhereAmI(d.Tree.RootNode(), d.Text, byteOffSet)
+}
+
+// TODO: bsena; add Symbols from loads
+func (d *Document) SymbolHierarchy(byteOffSet uint) []*symbol.Symbol {
+	var all []*symbol.Symbol
+	all = append(all, d.Symbols...)
+
+	res := query.SymbolHierarchy(d.Tree.RootNode(), d.Text, byteOffSet, all)
+	res = append(res, builtin.GetHelpers()...)
+	res = append(res, builtin.GetHephBuiltins()...)
+	res = append(res, builtin.GetSKBuiltins()...)
+
+	return res
 }
 
 func (d *Document) ExtractCurrentFunctionName(byteOffSet uint) string {
@@ -318,6 +387,8 @@ func (d *Document) QueryAll(symbolName []string) []*symbol.Symbol {
 	return symbol.FindManySymbols(d.Symbols, symbolName)
 }
 
+// TODO: bsena; All these Queries must be scope-aware
+// Looking only for those if are not replaced in the scope
 func (d *Document) QueryCalls(symbolName string) []*symbol.Symbol {
 	return symbol.FindCalls(d.Calls, symbolName)
 }
