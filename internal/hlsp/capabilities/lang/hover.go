@@ -8,13 +8,10 @@ import (
 	"github.com/hephbuild/heph/internal/hlsp/runtime/builtin"
 	"github.com/hephbuild/heph/internal/hlsp/runtime/query"
 	"github.com/hephbuild/heph/internal/hlsp/runtime/symbol"
-	"github.com/tliron/commonlog"
 	"github.com/tliron/glsp"
 
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
-
-var hoverLog = commonlog.GetLogger("hover")
 
 func TextDocumentHoverFuncWrapper(manager *runtime.Manager) protocol.TextDocumentHoverFunc {
 	return func(glspContext *glsp.Context, params *protocol.HoverParams) (*protocol.Hover, error) {
@@ -33,14 +30,29 @@ func TextDocumentHoverFuncWrapper(manager *runtime.Manager) protocol.TextDocumen
 		// TODO: bsena; this does not get builtin like heph.pkg.addr
 
 		// TODO: bsena; We need to find a way to get vars from inside a function
+		// Maybe Look for WhereAmI before hierarchy? Or the other way around, look
+		// whereami after hierarchy and then add docs if inside args
 		symbolName := doc.ExtractCurrentSymbolName(uint(bytePos))
 
-		hierarchy := doc.SymbolHierarchy(uint(bytePos))
-		hierarchyNames := make([]string, len(hierarchy))
-		for i, s := range hierarchy {
-			hierarchyNames[i] = s.Name
+		// TODO: bsena; To make this works we actually need instead of current idenfitier name
+		// we need to query "WordUnderCursor"
+		// if symbolName == "" {
+		// 	return nil, nil
+		// }
+
+		loc, symbolName, hierarchy := doc.SymbolHierarchyWithLocation(uint(bytePos))
+		if symbolName == "" {
+			return nil, nil
 		}
-		hoverLog.Debugf("hierarchy: %s", strings.Join(hierarchyNames, " -> "))
+
+		if loc == query.ArgsLocation && len(hierarchy) > 0 {
+			s := hierarchy[len(hierarchy)-1]
+			for _, p := range s.Parameters {
+				if strings.Contains(p.Name, symbolName) {
+					return createArgHover(s, p), nil
+				}
+			}
+		}
 
 		for i := len(hierarchy) - 1; i >= 0; i-- {
 			current := hierarchy[i]

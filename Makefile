@@ -11,7 +11,7 @@ install-dev:
 	mv /tmp/heph $(location)
 
 install-dev-build:
-	go build -o $(location)
+	go build -gcflags="all=-N -l" -o $(location) 
 
 gen:
 	cd lib/tref/internal && ./gen.sh

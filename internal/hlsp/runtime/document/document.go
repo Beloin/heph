@@ -271,6 +271,7 @@ func extractSymbols(tree *tree_sitter.Tree, text []byte, source string) ([]*symb
 
 	// Target calls are special calls
 	// TODO: bsena; Maybe do this to groups also?
+	// Nah, we will remove this
 	var calls, targets []*symbol.Symbol
 	// for _, call := range result.Calls {
 	// 	if call.Name == builtin.TargetName {
@@ -317,6 +318,7 @@ func (d *Document) ExtractCurrentSymbol(byteOffSet uint) (*symbol.Symbol, bool) 
 	return d.Query(sName)
 }
 
+// ExtractCurrentSymbolName extracts current idenfier name closest to current cursor position
 func (d *Document) ExtractCurrentSymbolName(byteOffSet uint) string {
 	return query.ExtractCurrentSymbol(d.Tree.RootNode(), d.Text, byteOffSet)
 }
@@ -325,10 +327,12 @@ func (d *Document) WhereAmI(byteOffSet uint) query.CodeLocation {
 	return query.WhereAmI(d.Tree.RootNode(), d.Text, byteOffSet)
 }
 
-// TODO: bsena; add Symbols from loads
 func (d *Document) SymbolHierarchy(byteOffSet uint) []*symbol.Symbol {
 	var all []*symbol.Symbol
 	all = append(all, d.Symbols...)
+	d.RangeDocLoads(func(l *Load) {
+		all = append(all, l.Doc.Symbols...)
+	})
 
 	res := query.SymbolHierarchy(d.Tree.RootNode(), d.Text, byteOffSet, all)
 	res = append(res, builtin.GetHelpers()...)
@@ -336,6 +340,24 @@ func (d *Document) SymbolHierarchy(byteOffSet uint) []*symbol.Symbol {
 	res = append(res, builtin.GetSKBuiltins()...)
 
 	return res
+}
+
+func (d *Document) SymbolHierarchyWithLocation(byteOffSet uint) (query.CodeLocation, string, []*symbol.Symbol) {
+	var all []*symbol.Symbol
+	all = append(all, d.Symbols...)
+	d.RangeDocLoads(func(l *Load) {
+		all = append(all, l.Doc.Symbols...)
+	})
+
+	loc, symbolName, hierarchy := query.SymbolHierarchyWithLocation(d.Tree.RootNode(), d.Text, byteOffSet, all)
+	// TODO: fix this size
+	newRes := make([]*symbol.Symbol, 0, len(hierarchy)+len(hierarchy))
+	newRes = append(newRes, builtin.GetHelpers()...)
+	newRes = append(newRes, builtin.GetHephBuiltins()...)
+	newRes = append(newRes, builtin.GetSKBuiltins()...)
+	newRes = append(newRes, hierarchy...)
+
+	return loc, symbolName, newRes
 }
 
 func (d *Document) ExtractCurrentFunctionName(byteOffSet uint) string {
