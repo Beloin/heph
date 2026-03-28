@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/hephbuild/heph/internal/hlsp/runtime"
-	"github.com/hephbuild/heph/internal/hlsp/runtime/builtin"
 	"github.com/hephbuild/heph/internal/hlsp/runtime/query"
 	"github.com/hephbuild/heph/internal/hlsp/runtime/symbol"
 	"github.com/tliron/glsp"
@@ -45,6 +44,7 @@ func TextDocumentHoverFuncWrapper(manager *runtime.Manager) protocol.TextDocumen
 			return nil, nil
 		}
 
+		// Args are a special case where we can get args by name directly from its signature
 		if loc == query.ArgsLocation && len(hierarchy) > 0 {
 			s := hierarchy[len(hierarchy)-1]
 			for _, p := range s.Parameters {
@@ -63,66 +63,6 @@ func TextDocumentHoverFuncWrapper(manager *runtime.Manager) protocol.TextDocumen
 			if current.Name == symbolName {
 				return createHover(current), nil
 			}
-		}
-
-		if symbolName == builtin.TargetName {
-			if s := doc.QueryClosestTarget(uint(bytePos)); s != nil {
-				return createHover(s), nil
-			}
-		}
-
-		// If is an argument inside a function call we can get the function name and args information
-		funName := doc.ExtractCurrentFunctionName(uint(bytePos))
-
-		// Give target info from the first enclosing function call in document
-		if funName == builtin.TargetName {
-			if s := doc.QueryClosestTarget(uint(bytePos)); s != nil {
-				for _, p := range s.Parameters {
-					if strings.Contains(p.Name, symbolName) {
-						return createArgHover(s, p), nil
-					}
-				}
-			}
-		}
-
-		// TODO: bsena; maybe the chain can use this
-		switch doc.WhereAmI(uint(bytePos)) {
-		case query.BlockLocation:
-			// TODO: bsena; THIS IS NOT WORKING
-			if s, found := doc.Query(funName); found {
-				if inner, found := symbol.FindSymbolInSymbols(s, symbolName); found {
-					return createHover(inner), nil
-				}
-			}
-		case query.ArgsLocation:
-			if s, found := doc.Query(funName); found {
-				for _, p := range s.Parameters {
-					if strings.Contains(p.Name, symbolName) {
-						return createArgHover(s, p), nil
-					}
-				}
-			}
-
-			// Actually I think we should do something smarter
-			// maybe go through all nodes and extracting the parent symbol
-
-		}
-
-		if s, found := doc.Query(funName); found {
-			for _, p := range s.Parameters {
-				if strings.Contains(p.Name, symbolName) {
-					return createArgHover(s, p), nil
-				}
-			}
-		}
-
-		// Query first for current document symbols
-		if symbol, found := doc.Query(symbolName); found {
-			return createHover(symbol), nil
-		}
-
-		if symbol, found := manager.Query(symbolName); found {
-			return createHover(symbol), nil
 		}
 
 		return nil, nil

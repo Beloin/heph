@@ -67,6 +67,27 @@ func extractLocation(manager *runtime.Manager, uri string, pos *protocol.Positio
 			}
 		}
 
+
+		// TODO: bsena; check if this works
+		// if it works should be enough and you can remove the two below
+		_, symbolName, hierarchy := doc.SymbolHierarchyWithLocation(pos)
+		if symbolName == "" {
+			return nil, false
+		}
+
+		for i := len(hierarchy) - 1; i >= 0; i-- {
+			current := hierarchy[i]
+			if current.Kind == symbol.FunctionCallKind {
+				continue
+			}
+
+			if current.Name == symbolName {
+				return buildLocationFromSymbol(doc.FullPath, current), true
+			}
+		}
+
+		return nil, false
+
 		if symbolName := doc.ExtractCurrentSymbolName(pos); symbolName != "" {
 			// TODO: bsena; If inside block, query local symbols
 			doc.WhereAmI(pos)

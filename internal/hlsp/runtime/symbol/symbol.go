@@ -41,7 +41,7 @@ type Parameter struct {
 
 	// Type points to the symbol representing this parameter's type.
 	// nil means unknown. For primitives it points to a sentinel (e.g. PrimitiveInt).
-	// For user-defined types it points to the class symbol resolved at parse time.
+	// For user-defined types it points to the class/struct symbol resolved at parse time.
 	Type *Symbol
 }
 
@@ -54,6 +54,10 @@ type Symbol struct {
 	Kind      SymbolKind
 	Signature string
 
+	// TODO: bsena; mayube instead of parameters we add then in symbol.Symbols bc we can know based on kind
+	// that inerr symbols must be params
+	// Actually we can use this as a "bypass" of symbols type, bc I am too lazy 
+	// to really use scope based queries in query.Calls
 	Parameters []*Parameter
 
 	// TODO: bsena; Maybe value can also be a Symbol, bc we can have a = b

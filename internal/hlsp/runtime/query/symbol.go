@@ -176,6 +176,11 @@ func SymbolHierarchy(root *tree_sitter.Node, source []byte, byteOffSet uint, roo
 
 		var s *symbol.Symbol
 		for _, sym := range rootSyms {
+			// We want definitions, not calls
+			if sym.Kind == symbol.FunctionCallKind {
+				continue
+			}
+
 			if sym.Name != name {
 				continue
 			}
@@ -186,11 +191,18 @@ func SymbolHierarchy(root *tree_sitter.Node, source []byte, byteOffSet uint, roo
 				s = sym
 			}
 		}
+
+		// Fallback to current symbol in hierarchy
 		if s == nil {
-			break
+			if len(hierarchySymbols) == 0 {
+				break
+			}
+
+			s = hierarchySymbols[len(hierarchySymbols)-1]
 		}
 
 		hierarchySymbols = append(hierarchySymbols, s)
+
 		rootSyms = s.Symbols
 	}
 

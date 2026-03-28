@@ -73,7 +73,10 @@ func ExtractCalls(tree *tree_sitter.Tree, text []byte, source string, funs []*sy
 
 					if value := currentNode.ChildByFieldName("value"); value != nil {
 						newParam.Value = value.Utf8Text(text)
+						newParam.Type = ResolveType(value.Kind())
 					}
+				} else {
+					newParam.Type = ResolveType(currentNode.Kind())
 				}
 
 				currEntry.sym.Parameters = append(currEntry.sym.Parameters, &newParam)
@@ -108,6 +111,7 @@ func ExtractCalls(tree *tree_sitter.Tree, text []byte, source string, funs []*sy
 }
 
 // QueryCalls is a convenience wrapper that returns all calls without scope awareness.
+// TODO: bsena; remove this
 func QueryCalls(tree *tree_sitter.Tree, text []byte, source string) ([]*symbol.Symbol, error) {
 	return ExtractCalls(tree, text, source, nil)
 }
