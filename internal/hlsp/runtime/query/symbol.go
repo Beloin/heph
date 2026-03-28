@@ -151,6 +151,14 @@ func WhereAmIWithSymbol(root *tree_sitter.Node, source []byte, byteOffSet uint) 
 // for the next level.
 func SymbolHierarchy(root *tree_sitter.Node, source []byte, byteOffSet uint, rootSyms []*symbol.Symbol) []*symbol.Symbol {
 	var hierarchySymbols []*symbol.Symbol
+
+	// If the first symbol is the document root, pre-populate the hierarchy with it
+	// and remove it from the search pool so it is not matched again.
+	if len(rootSyms) > 0 && rootSyms[0].Kind == symbol.RootKind {
+		hierarchySymbols = append(hierarchySymbols, rootSyms[0])
+		rootSyms = rootSyms[1:]
+	}
+
 	for child := root.FirstChildForByte(byteOffSet); child != nil; child = child.FirstChildForByte(byteOffSet) {
 		root = child
 
@@ -198,7 +206,8 @@ func SymbolHierarchy(root *tree_sitter.Node, source []byte, byteOffSet uint, roo
 				break
 			}
 
-			s = hierarchySymbols[len(hierarchySymbols)-1]
+			rootSyms = hierarchySymbols[len(hierarchySymbols)-1].Symbols
+			continue
 		}
 
 		hierarchySymbols = append(hierarchySymbols, s)

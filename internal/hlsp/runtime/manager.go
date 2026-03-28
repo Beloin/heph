@@ -187,7 +187,7 @@ func (m *Manager) AllLoadedSymbols(filters ...Filter) []*symbol.Symbol {
 	allSymbols := m.BuiltinSymbols
 	m.DocumentMap.Range(func(key, value any) bool {
 		doc := value.(*docTuple)
-		for _, smb := range doc.Document.Symbols {
+		for _, smb := range doc.Document.Root.Symbols {
 			shoulAdd := true
 			for _, f := range filters {
 				if !f(smb) {
@@ -231,7 +231,7 @@ func (m *Manager) AllLoadedSymbolsPerKind() kindStruct {
 
 	m.DocumentMap.Range(func(key, value any) bool {
 		doc := value.(*docTuple)
-		for _, smb := range doc.Document.Symbols {
+		for _, smb := range doc.Document.Root.Symbols {
 			switch smb.Kind {
 			case symbol.FunctionKind:
 				funs = append(funs, smb)

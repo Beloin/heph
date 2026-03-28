@@ -11,7 +11,7 @@ import (
 
 var allDefs = []string{
 	// From helpers.py
-	"text_file", "json_file", "tool_target", "group", "load",
+	"text_file", "json_file", "tool_target", "group", "load", "glob",
 
 	// From pybt.py - Top-level functions
 	"abs", "any", "all", "bool", "chr", "dict", "dir",
@@ -22,6 +22,11 @@ var allDefs = []string{
 
 	// From target.py
 	"target",
+
+	// From heph builtins
+	"to_json",
+	"heph", "heph.canonicalize", "heph.is_target", "heph.split", "heph.param",
+	"heph.pkg", "heph.pkg.dir", "heph.pkg.name", "heph.pkg.addr",
 }
 
 type BuiltinSuite struct {

@@ -4,7 +4,10 @@ type SymbolKind int
 
 // Kind types
 const (
-	ClassKind SymbolKind = iota
+	// Special symbol to define root scope
+	RootKind SymbolKind = iota
+
+	ClassKind
 	FunctionKind
 	VariableKind
 	ValueKind
@@ -56,7 +59,7 @@ type Symbol struct {
 
 	// TODO: bsena; mayube instead of parameters we add then in symbol.Symbols bc we can know based on kind
 	// that inerr symbols must be params
-	// Actually we can use this as a "bypass" of symbols type, bc I am too lazy 
+	// Actually we can use this as a "bypass" of symbols type, bc I am too lazy
 	// to really use scope based queries in query.Calls
 	Parameters []*Parameter
 

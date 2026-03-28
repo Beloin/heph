@@ -166,7 +166,11 @@ func ExtractFunctions(tree *tree_sitter.Tree, text []byte, source string) ([]*sy
 				currEntry.sym.Parameters = append(currEntry.sym.Parameters, currParam)
 			case "function.param.type":
 				if currParam != nil {
-					currParam.Type = ResolveType(patternValue)
+					if t := ResolveType(patternValue); t != nil {
+						currParam.Type = t
+					} else {
+						currParam.Type = &symbol.Symbol{Name: patternValue}
+					}
 				}
 			case "function.param.value":
 				if currParam != nil {

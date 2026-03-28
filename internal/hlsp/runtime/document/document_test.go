@@ -34,8 +34,8 @@ func (s *DocumentTestSuite) TestNewDocument() {
 	s.Equal("test.py", doc.FullPath)
 	s.NotNil(doc.Tree)
 	s.NotNil(doc.Text)
-	s.NotNil(doc.Symbols)
-	s.NotEmpty(doc.Symbols)
+	s.NotNil(doc.Root.Symbols)
+	s.NotEmpty(doc.Root.Symbols)
 }
 
 func (s *DocumentTestSuite) TestSwapTree() {
@@ -50,7 +50,7 @@ func (s *DocumentTestSuite) TestSwapTree() {
 	s.Require().NoError(err)
 	s.Require().NotNil(doc)
 
-	initialSymbolCount := len(doc.Symbols)
+	initialSymbolCount := len(doc.Root.Symbols)
 	s.True(initialSymbolCount > 0, "Should have some symbols")
 
 	newContent := []byte(`def new_function():
@@ -63,10 +63,10 @@ new_variable = 42`)
 	s.Require().NotNil(oldTree)
 
 	s.Equal(string(newContent), doc.TextString)
-	s.NotEmpty(doc.Symbols)
+	s.NotEmpty(doc.Root.Symbols)
 
-	foundSymbols := make([]string, 0, len(doc.Symbols))
-	for _, sym := range doc.Symbols {
+	foundSymbols := make([]string, 0, len(doc.Root.Symbols))
+	for _, sym := range doc.Root.Symbols {
 		foundSymbols = append(foundSymbols, sym.Name)
 	}
 

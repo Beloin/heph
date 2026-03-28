@@ -43,7 +43,7 @@ func TextDocumentCompletionFuncWrapper(manager *runtime.Manager) protocol.TextDo
 			}
 
 			// Append current doc symbols
-			for _, s := range doc.Symbols {
+			for _, s := range doc.Root.Symbols {
 				compItem := createCompletionItem(s)
 				completionItems = append(completionItems, compItem)
 			}

@@ -15,7 +15,11 @@ import (
 //go:embed testdata/call_test.py
 var callTest []byte
 
-var expectedFunctionCalls = []string{"load", "print", "my_other_call", "fun_no_args", "target", "fun_with_no_args", "fun_with_no_args"}
+// All calls at top level when no scope (nil funs)
+var expectedFunctionCalls = []string{"load", "print", "my_other_call", "fun_no_args", "target", "fun_with_no_args", "fun_with_no_args", "inner_call", "another_inner_call"}
+
+// Top-level calls when funs is provided — inner calls are scoped into my_func.Symbols
+var expectedTopLevelCallsWithFuns = []string{"load", "print", "my_other_call", "fun_no_args", "target", "fun_with_no_args", "fun_with_no_args"}
 
 type CallQuerySuite struct {
 	suite.Suite
@@ -138,7 +142,7 @@ func (suite *CallQuerySuite) TestCallsInsideFunction() {
 	for _, s := range calls {
 		topLevelNames = append(topLevelNames, s.Name)
 	}
-	suite.Require().ElementsMatch(expectedFunctionCalls, topLevelNames)
+	suite.Require().ElementsMatch(expectedTopLevelCallsWithFuns, topLevelNames)
 
 	// inner_call and another_inner_call should be in my_func.Symbols
 	var myFunc *symbol.Symbol

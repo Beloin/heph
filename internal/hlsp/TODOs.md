@@ -11,6 +11,8 @@
 - [ ] Use chain in capabilites
 - [ ] I do not like how we use scope rn. We work with symbols and not with a real scope tree
 - [ ] Accept struct and see how to work with symbols there
+- [ ] Read the yaml to know it it will be always BUILD
+
 
 
 ## Future
@@ -18,3 +20,4 @@
 1. Change how we parse stuff. We should probably parse scope by scope, so we can have all data first:
   - Variables -> fun def -> fun call
   - This way we recursively go from scope from scope knowing current (and outer) scope variables and function definitions
+2. Instead of fallback to first BUILD in directory, we can search for that function definition

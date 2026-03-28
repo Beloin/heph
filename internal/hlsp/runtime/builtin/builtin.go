@@ -121,18 +121,9 @@ func buildHephBuiltins() []*symbol.Symbol {
 	// TODO: bsena; Make a way so we can have description in each object
 
 	// Top-level utilities
-	add(makeFn("glob", []*symbol.Parameter{
-		{Name: "pattern", Type: symbol.PrimitiveString, DocString: "Glob pattern to match (e.g. \"./*\", \"**/*.go\")"},
-		{Name: "exclude", Type: symbol.ListType, DocString: "Patterns to exclude from the match"},
-	}, symbol.ListType, "Matches files relative to the current package directory."))
-
 	add(makeFn("to_json", []*symbol.Parameter{
 		{Name: "value", DocString: "Starlark object to serialize"},
 	}, symbol.PrimitiveString, "Returns the string representation of a Starlark object.\n\nto_json(['hello']) # => [\"hello\"]"))
-
-	add(makeFn("fail", []*symbol.Parameter{
-		{Name: "msg", Type: symbol.PrimitiveString, DocString: "Error message"},
-	}, nil, "Stops execution and exits with an error message.\n\nfail(\"Bad value\")"))
 
 	// heph.*
 	add(makePath("heph.canonicalize", []*symbol.Parameter{

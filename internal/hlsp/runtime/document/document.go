@@ -21,10 +21,8 @@ type Document struct {
 	// FullPath
 	FullPath string
 
-	Symbols []*symbol.Symbol
-	// TODO: bsena; We probably need to remove this since we will going
-	// all the way down from symbol scope
-	// So just add all this to the Symbols array
+	// Root symbol defining all symbol scope tree
+	Root    *symbol.Symbol
 	Calls   []*symbol.Symbol
 	Targets []*symbol.Symbol
 
@@ -92,7 +90,7 @@ func NewDocument(name string, tree *tree_sitter.Tree, rawText []byte, drivers *d
 	}
 
 	syms, calls, targets, err := extractSymbols(doc.Tree, doc.Text, doc.FullPath)
-	doc.Symbols = syms
+	doc.Root = &symbol.Symbol{Name: name, Symbols: syms, Kind: symbol.RootKind}
 	doc.Calls = calls
 	doc.Targets = targets
 	doc.extractLoads()
@@ -102,13 +100,11 @@ func NewDocument(name string, tree *tree_sitter.Tree, rawText []byte, drivers *d
 	return doc, err
 }
 
-// SwapTree parses newText (using d.Tree as base for incremental parsing), then atomically
-// swaps the current tree and returns the closed old tree.
 func (d *Document) SwapTree(parser *tree_sitter.Parser, newText []byte) (*tree_sitter.Tree, error) {
 	d.treeMutex.Lock()
 	defer d.treeMutex.Unlock()
 
-	newT := parser.Parse(newText, d.Tree)
+	newT := parser.Parse(newText, nil)
 	if newT == nil {
 		return nil, ErrParseFailed
 	}
@@ -120,7 +116,7 @@ func (d *Document) SwapTree(parser *tree_sitter.Parser, newText []byte) (*tree_s
 		return nil, err
 	}
 
-	d.Symbols = syms
+	d.Root = &symbol.Symbol{Name: d.FullPath, Symbols: syms, Kind: symbol.RootKind}
 	d.Calls = calls
 	d.Targets = targets
 	d.Tree = newT
@@ -201,8 +197,7 @@ func (d *Document) extractTargets2() {
 
 	btTarget := builtin.GetTarget()[0]
 
-	d.enrichTargets(d.Symbols, btTarget)
-	d.enrichTargets(d.Calls, btTarget)
+	d.enrichTargets(d.Root.Symbols, btTarget)
 }
 
 func (d *Document) enrichTargets(syms []*symbol.Symbol, btTarget *symbol.Symbol) {
@@ -287,7 +282,7 @@ func extractSymbols(tree *tree_sitter.Tree, text []byte, source string) ([]*symb
 
 func (d *Document) extractLoads() {
 	loads := []*RawLoad{}
-	for _, call := range d.Symbols {
+	for _, call := range d.Root.Symbols {
 		if call.Name == builtin.LoadName {
 			if len(call.Parameters) < 2 {
 				continue
@@ -329,9 +324,9 @@ func (d *Document) WhereAmI(byteOffSet uint) query.CodeLocation {
 
 func (d *Document) SymbolHierarchy(byteOffSet uint) []*symbol.Symbol {
 	var all []*symbol.Symbol
-	all = append(all, d.Symbols...)
+	all = append(all, d.Root.Symbols...)
 	d.RangeDocLoads(func(l *Load) {
-		all = append(all, l.Doc.Symbols...)
+		all = append(all, l.Doc.Root.Symbols...)
 	})
 
 	res := query.SymbolHierarchy(d.Tree.RootNode(), d.Text, byteOffSet, all)
@@ -344,9 +339,10 @@ func (d *Document) SymbolHierarchy(byteOffSet uint) []*symbol.Symbol {
 
 func (d *Document) SymbolHierarchyWithLocation(byteOffSet uint) (query.CodeLocation, string, []*symbol.Symbol) {
 	var all []*symbol.Symbol
-	all = append(all, d.Symbols...)
+	all = append(all, d.Root)
+	all = append(all, d.Root.Symbols...)
 	d.RangeDocLoads(func(l *Load) {
-		all = append(all, l.Doc.Symbols...)
+		all = append(all, l.Doc.Root.Symbols...)
 	})
 
 	loc, symbolName, hierarchy := query.SymbolHierarchyWithLocation(d.Tree.RootNode(), d.Text, byteOffSet, all)
@@ -372,7 +368,7 @@ func (d *Document) QueryType(name string) (*symbol.Symbol, bool) {
 		return s, true
 	}
 
-	if s, found := symbol.FindSymbol(d.Symbols, name); found {
+	if s, found := symbol.FindSymbol(d.Root.Symbols, name); found {
 		if s.Is(symbol.PrimitiveKind) || s.Is(symbol.ClassKind) {
 			return s, true
 		}
@@ -381,7 +377,7 @@ func (d *Document) QueryType(name string) (*symbol.Symbol, bool) {
 	d.loadsMu.RLock()
 	defer d.loadsMu.RUnlock()
 	for _, load := range d.DocLoads {
-		if s, found := symbol.FindSymbol(load.Doc.Symbols, name); found {
+		if s, found := symbol.FindSymbol(load.Doc.Root.Symbols, name); found {
 			if s.Is(symbol.PrimitiveKind) || s.Is(symbol.ClassKind) {
 				return s, true
 			}
@@ -392,7 +388,7 @@ func (d *Document) QueryType(name string) (*symbol.Symbol, bool) {
 }
 
 func (d *Document) Query(symbolName string) (*symbol.Symbol, bool) {
-	for _, symbol := range d.Symbols {
+	for _, symbol := range d.Root.Symbols {
 		if symbol.FullyQualifiedName == symbolName {
 			return symbol, true
 		}
@@ -402,17 +398,17 @@ func (d *Document) Query(symbolName string) (*symbol.Symbol, bool) {
 }
 
 func (d *Document) QueryMany(symbolName []string) (*symbol.Symbol, bool) {
-	return symbol.FindManySymbol(d.Symbols, symbolName)
+	return symbol.FindManySymbol(d.Root.Symbols, symbolName)
 }
 
 func (d *Document) QueryAll(symbolName []string) []*symbol.Symbol {
-	return symbol.FindManySymbols(d.Symbols, symbolName)
+	return symbol.FindManySymbols(d.Root.Symbols, symbolName)
 }
 
 // TODO: bsena; All these Queries must be scope-aware
 // Looking only for those if are not replaced in the scope
 func (d *Document) QueryCalls(symbolName string) []*symbol.Symbol {
-	return symbol.FindCalls(d.Calls, symbolName)
+	return symbol.FindCalls(d.Root.Symbols, symbolName)
 }
 
 func (d *Document) QueryTargets() []*symbol.Symbol {
