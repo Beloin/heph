@@ -28,17 +28,6 @@ func TextDocumentHoverFuncWrapper(manager *runtime.Manager) protocol.TextDocumen
 
 		// TODO: bsena; this does not get builtin like heph.pkg.addr
 
-		// TODO: bsena; We need to find a way to get vars from inside a function
-		// Maybe Look for WhereAmI before hierarchy? Or the other way around, look
-		// whereami after hierarchy and then add docs if inside args
-		symbolName := doc.ExtractCurrentSymbolName(uint(bytePos))
-
-		// TODO: bsena; To make this works we actually need instead of current idenfitier name
-		// we need to query "WordUnderCursor"
-		// if symbolName == "" {
-		// 	return nil, nil
-		// }
-
 		loc, symbolName, hierarchy := doc.SymbolHierarchyWithLocation(uint(bytePos))
 		if symbolName == "" {
 			return nil, nil
@@ -60,8 +49,15 @@ func TextDocumentHoverFuncWrapper(manager *runtime.Manager) protocol.TextDocumen
 				continue
 			}
 
-			if current.Name == symbolName {
-				return createHover(current), nil
+			// Check nested symbols within this hierarchy level
+			for _, sym := range current.Symbols {
+				if sym.Kind == symbol.FunctionCallKind {
+					continue
+				}
+
+				if sym.Name == symbolName {
+					return createHover(sym), nil
+				}
 			}
 		}
 
@@ -80,7 +76,9 @@ func createHover(sym *symbol.Symbol) *protocol.Hover {
 		if sym.Type != nil {
 			sig += ":" + sym.Type.Name
 		}
-		sig += " = " + sym.Value
+		if sym.Value != "" {
+			sig += " = " + sym.Value
+		}
 		sb.WriteString(langDecorateMultiline(sig, runtime.HephLanguage))
 	} else {
 		sb.WriteString(langDecorateMultiline(sym.Signature, runtime.HephLanguage))
@@ -116,8 +114,8 @@ func createArgHover(fn *symbol.Symbol, param *symbol.Parameter) *protocol.Hover 
 		sb.WriteString(":" + param.Type.Name)
 	}
 
-	if param.Value != "" {
-		sb.WriteString(" = " + param.Value)
+	if param.Value != nil {
+		sb.WriteString(" = " + param.Value.Name)
 	}
 
 	sb.WriteString(" from " + langDecorate(fn.Name))

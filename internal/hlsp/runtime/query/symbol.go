@@ -184,23 +184,20 @@ func SymbolHierarchy(root *tree_sitter.Node, source []byte, byteOffSet uint, roo
 
 		var s *symbol.Symbol
 		for _, sym := range rootSyms {
-			// We want definitions, not calls
-			if sym.Kind == symbol.FunctionCallKind {
-				continue
-			}
-
 			if sym.Name != name {
 				continue
 			}
 			if sym.Position.ByteStart > byteOffSet {
 				continue
 			}
+
+			// Look alway for the closest one
 			if s == nil || sym.Position.ByteStart > s.Position.ByteStart {
 				s = sym
 			}
 		}
 
-		// Fallback to current symbol in hierarchy
+		// Fallback to current parent symbols in hierarchy
 		if s == nil {
 			if len(hierarchySymbols) == 0 {
 				break

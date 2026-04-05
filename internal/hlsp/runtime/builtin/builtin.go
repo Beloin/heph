@@ -23,7 +23,25 @@ var (
 	helpersSymbols []*symbol.Symbol
 	pybtSymbols    []*symbol.Symbol
 	hephSymbols    []*symbol.Symbol
+
+	// Primitive type symbols available in scope for type resolution
+	primitiveSymbols []*symbol.Symbol
 )
+
+func init() {
+	// Initialize primitive type symbols
+	primitiveSymbols = []*symbol.Symbol{
+		symbol.PrimitiveInt,
+		symbol.PrimitiveFloat,
+		symbol.PrimitiveBool,
+		symbol.PrimitiveString,
+		symbol.PrimitiveNull,
+		symbol.ListType,
+		symbol.DictType,
+		symbol.ObjectType,
+		symbol.UnknownType,
+	}
+}
 
 // target is defined in-code as a standalone symbol.
 var targetBt = symbol.Symbol{
@@ -62,15 +80,18 @@ func InitBuiltins(parser *tree_sitter.Parser) error {
 
 	var err error
 
-	helpersSymbols, err = query.QuerySymbols(helpersTree, helpers, builtinSource)
+	helpersRoot, err := query.QueryAll(helpersTree, helpers, builtinSource)
 	if err != nil {
 		return err
 	}
+	helpersSymbols = query.FilterSymbolsByKind(helpersRoot.Symbols, symbol.FunctionKind)
 
-	pybtSymbols, err = query.QuerySymbols(pybtTree, pybt, builtinSource)
+	pybtRoot, err := query.QueryAll(pybtTree, pybt, builtinSource)
 	if err != nil {
 		return err
 	}
+	pybtSymbols = append(query.FilterSymbolsByKind(pybtRoot.Symbols, symbol.FunctionKind),
+		query.FilterSymbolsByKind(pybtRoot.Symbols, symbol.VariableKind)...)
 
 	hephSymbols = buildHephBuiltins()
 
@@ -78,8 +99,8 @@ func InitBuiltins(parser *tree_sitter.Parser) error {
 }
 
 // GetTarget returns the standalone in-code target() symbol.
-func GetTarget() []*symbol.Symbol {
-	return []*symbol.Symbol{&targetBt}
+func GetTarget() *symbol.Symbol {
+	return &targetBt
 }
 
 // GetHelpers returns the symbols parsed from helpers.py (load, group, text_file, …).
@@ -97,9 +118,14 @@ func GetHephBuiltins() []*symbol.Symbol {
 	return hephSymbols
 }
 
+// GetPrimitiveSymbols returns primitive type symbols for scope injection.
+func GetPrimitiveSymbols() []*symbol.Symbol {
+	return primitiveSymbols
+}
+
 // All returns all builtin symbols concatenated.
 func All() []*symbol.Symbol {
-	return slices.Concat(GetTarget(), helpersSymbols, pybtSymbols, hephSymbols)
+	return slices.Concat([]*symbol.Symbol{GetTarget()}, helpersSymbols, pybtSymbols, hephSymbols, primitiveSymbols)
 }
 
 // buildHephBuiltins constructs all heph-namespace and utility builtin symbols.
@@ -213,8 +239,8 @@ func buildSig(name string, params []*symbol.Parameter, retType *symbol.Symbol) s
 		if p.Type != nil {
 			sb.WriteString(":" + p.Type.Name)
 		}
-		if p.Value != "" {
-			sb.WriteString("=" + p.Value)
+		if p.Value != nil {
+			sb.WriteString("=" + p.Value.Name)
 		}
 	}
 	sb.WriteString(")")

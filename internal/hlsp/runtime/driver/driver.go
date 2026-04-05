@@ -39,11 +39,7 @@ func NewSymbolFromTargetSchema(resp *pluginv1.ConfigResponse) (*symbol.Symbol, e
 	}
 
 	// Start with builtin target params (name, deps, out, etc.) if available.
-	// var builtinParams []*symbol.Parameter
-	// if targets := builtin.GetTarget(); len(targets) > 0 {
-	// 	builtinParams = targets[0].Parameters
-	// }
-	btTarget := builtin.GetTarget()[0] // TODO: bsena; make target return only eone
+	btTarget := builtin.GetTarget()
 
 	fields := schema.GetField()
 	params := make([]*symbol.Parameter, 0, len(btTarget.Parameters)+len(fields))

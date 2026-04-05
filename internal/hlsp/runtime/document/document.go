@@ -137,13 +137,13 @@ func (d *Document) extractTargets() {
 	resolved := make([]*symbol.Symbol, 0, len(d.Targets))
 
 	// TODO: bsena; add error treatment
-	btTarget := builtin.GetTarget()[0]
+	btTarget := builtin.GetTarget()
 
 	for _, call := range d.Targets {
 		var driverName string
 		for _, p := range call.Parameters {
-			if p.Name == builtin.DriverName {
-				driverName = strings.Trim(p.Value, "\"'")
+			if p.Name == builtin.DriverName && p.Value != nil {
+				driverName = strings.Trim(p.Value.Name, "\"'")
 				break
 			}
 		}
@@ -195,15 +195,15 @@ func (d *Document) extractTargets2() {
 	d.treeMutex.Lock()
 	defer d.treeMutex.Unlock()
 
-	btTarget := builtin.GetTarget()[0]
+	btTarget := builtin.GetTarget()
 
 	d.enrichTargets(d.Root.Symbols, btTarget)
 }
 
-func (d *Document) enrichTargets(syms []*symbol.Symbol, btTarget *symbol.Symbol) {
+func (d *Document) enrichTargets(syms []*symbol.Symbol, builtinTarget *symbol.Symbol) {
 	for _, s := range syms {
 		if s.Kind == symbol.FunctionKind {
-			d.enrichTargets(s.Symbols, btTarget)
+			d.enrichTargets(s.Symbols, builtinTarget)
 			continue
 		}
 
@@ -212,18 +212,18 @@ func (d *Document) enrichTargets(syms []*symbol.Symbol, btTarget *symbol.Symbol)
 		}
 
 		s.Kind = symbol.TargetCallKind
-		s.DocString = btTarget.DocString
+		s.DocString = builtinTarget.DocString
 
 		var driverName string
 		for _, p := range s.Parameters {
-			if p.Name == builtin.DriverName {
-				driverName = strings.Trim(p.Value, "\"'")
+			if p.Name == builtin.DriverName && p.Value != nil {
+				driverName = strings.Trim(p.Value.Value, "\"'")
 				break
 			}
 		}
 
 		if driverName == "" {
-			s.DocString = btTarget.DocString
+			s.DocString = builtinTarget.DocString
 
 			continue
 		}
@@ -254,28 +254,22 @@ func (d *Document) getDriverSchema(driverName string) (*symbol.Symbol, bool) {
 }
 
 func extractSymbols(tree *tree_sitter.Tree, text []byte, source string) ([]*symbol.Symbol, []*symbol.Symbol, []*symbol.Symbol, error) {
-	// TODO: bsena; Someone is updating tree/text withou waiting for this query
-	result, err := query.QueryAll(tree, text, source)
+	root, err := query.QueryAll(tree, text, source)
 	if err != nil {
 		return nil, nil, nil, err
 	}
 
-	// TODO: bsena; add all inside all symbols
-	symbols := append(result.Functions, result.Variables...)
-	symbols = append(symbols, result.Calls...)
+	functions := query.FilterSymbolsByKind(root.Symbols, symbol.FunctionKind)
+	variables := query.FilterSymbolsByKind(root.Symbols, symbol.VariableKind)
+	calls := query.FilterSymbolsByKind(root.Symbols, symbol.FunctionCallKind)
+
+	symbols := append(functions, variables...)
+	symbols = append(symbols, calls...)
 
 	// Target calls are special calls
 	// TODO: bsena; Maybe do this to groups also?
 	// Nah, we will remove this
-	var calls, targets []*symbol.Symbol
-	// for _, call := range result.Calls {
-	// 	if call.Name == builtin.TargetName {
-	// 		// call.Kind = symbol.TargetCallKind
-	// 		calls = append(targets, call)
-	// 	} else {
-	// 		calls = append(calls, call)
-	// 	}
-	// }
+	var targets []*symbol.Symbol
 
 	return symbols, calls, targets, nil
 }
@@ -289,11 +283,30 @@ func (d *Document) extractLoads() {
 			}
 
 			rawValue := call.Parameters[0].Value
-			path := strings.Trim(rawValue, "\"")
+			if rawValue == nil {
+				continue
+			}
+
+			// Extract string value (could be literal or reference)
+			var path string
+			if rawValue.Value != "" {
+				path = strings.Trim(rawValue.Value, "\"")
+			} else {
+				path = rawValue.Name
+			}
+
 			loadsSlice := []string{}
 			for i := 1; i < len(call.Parameters); i++ {
-				rawFunction := call.Parameters[i].Value
-				fun := strings.Trim(rawFunction, "\"")
+				param := call.Parameters[i]
+				if param.Value == nil {
+					continue
+				}
+				var fun string
+				if param.Value.Value != "" {
+					fun = strings.Trim(param.Value.Value, "\"")
+				} else {
+					fun = param.Value.Name
+				}
 				loadsSlice = append(loadsSlice, fun)
 			}
 
@@ -322,35 +335,38 @@ func (d *Document) WhereAmI(byteOffSet uint) query.CodeLocation {
 	return query.WhereAmI(d.Tree.RootNode(), d.Text, byteOffSet)
 }
 
-func (d *Document) SymbolHierarchy(byteOffSet uint) []*symbol.Symbol {
-	var all []*symbol.Symbol
-	all = append(all, d.Root.Symbols...)
-	d.RangeDocLoads(func(l *Load) {
-		all = append(all, l.Doc.Root.Symbols...)
-	})
-
-	res := query.SymbolHierarchy(d.Tree.RootNode(), d.Text, byteOffSet, all)
-	res = append(res, builtin.GetHelpers()...)
-	res = append(res, builtin.GetHephBuiltins()...)
-	res = append(res, builtin.GetSKBuiltins()...)
-
-	return res
-}
-
+// SymbolHierarchyWithLocation returns current symbol hierarchy until current node.
+// To fetch informations about other usages you need to go to each children symbol from hierarchy.
 func (d *Document) SymbolHierarchyWithLocation(byteOffSet uint) (query.CodeLocation, string, []*symbol.Symbol) {
 	var all []*symbol.Symbol
-	all = append(all, d.Root)
+	// all = append(all, d.Root)
 	all = append(all, d.Root.Symbols...)
+
+	otherDocs := []*symbol.Symbol{}
 	d.RangeDocLoads(func(l *Load) {
-		all = append(all, l.Doc.Root.Symbols...)
+		otherDocs = append(otherDocs, l.Doc.Root)
 	})
 
 	loc, symbolName, hierarchy := query.SymbolHierarchyWithLocation(d.Tree.RootNode(), d.Text, byteOffSet, all)
-	// TODO: fix this size
-	newRes := make([]*symbol.Symbol, 0, len(hierarchy)+len(hierarchy))
-	newRes = append(newRes, builtin.GetHelpers()...)
-	newRes = append(newRes, builtin.GetHephBuiltins()...)
-	newRes = append(newRes, builtin.GetSKBuiltins()...)
+
+	target := builtin.GetTarget()
+	helpers := builtin.GetHelpers()
+	hephBuiltins := builtin.GetHephBuiltins()
+	skBuiltins := builtin.GetSKBuiltins()
+
+	builtinsArr := []*symbol.Symbol{target}
+	builtinsArr = append(builtinsArr, skBuiltins...)
+	builtinsArr = append(builtinsArr, helpers...)
+	builtinsArr = append(builtinsArr, hephBuiltins...)
+	builtinsArr = append(builtinsArr, target)
+	builtins := &symbol.Symbol{
+		Name:    "builtins",
+		Symbols: builtinsArr,
+	}
+	newRes := []*symbol.Symbol{}
+	newRes = append(newRes, builtins)
+	newRes = append(newRes, otherDocs...)
+	newRes = append(newRes, d.Root)
 	newRes = append(newRes, hierarchy...)
 
 	return loc, symbolName, newRes

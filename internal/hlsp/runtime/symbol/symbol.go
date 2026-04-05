@@ -39,15 +39,23 @@ type rawPosition struct {
 type Parameter struct {
 	Name string
 
-	Value     string
+	// Value points to the symbol representing the default value.
+	// For literals (strings, ints), points to a newly created Symbol with appropriate Kind.
+	// For references (variables, calls), points to the referenced symbol from scope.
+	Value *Symbol
+
 	DocString string
 
 	// Type points to the symbol representing this parameter's type.
 	// nil means unknown. For primitives it points to a sentinel (e.g. PrimitiveInt).
-	// For user-defined types it points to the class/struct symbol resolved at parse time.
+	// For user-defined types it points to the class/struct symbol resolved from scope.
+	// For complex types like List[str], points to a symbol representing the full type.
 	Type *Symbol
 }
 
+// Symbol is the base unit representing anything in a source tree.
+// Can be types, variables, function definitions, function calls and structs.
+// Each symbol has it's own scope.
 type Symbol struct {
 	Name   string
 	Source string
@@ -63,8 +71,7 @@ type Symbol struct {
 	// to really use scope based queries in query.Calls
 	Parameters []*Parameter
 
-	// TODO: bsena; Maybe value can also be a Symbol, bc we can have a = b
-	// Value is the current literal value for a variable
+	// Value is the literal text representation of the value for a variable.
 	Value     string
 	DocString string
 
@@ -74,23 +81,15 @@ type Symbol struct {
 
 	Symbols []*Symbol
 
+	// Parent points to the enclosing scope (nil for root).
+	Parent *Symbol
+
 	// Type points to the symbol representing this symbol's type (nil if unknown).
 	Type *Symbol
 }
 
 func (s *Symbol) Is(kind SymbolKind) bool {
 	return s.Kind == kind
-}
-
-// TODO: bsena; rename after remove from common
-// FindSymbolInSymbols searches only the top-level Symbols of parent for name.
-func FindSymbolInSymbols(parent *Symbol, name string) (*Symbol, bool) {
-	for _, s := range parent.Symbols {
-		if s.Name == name {
-			return s, true
-		}
-	}
-	return nil, false
 }
 
 // Primitive type sentinels. These are the canonical *Symbol values for built-in types.

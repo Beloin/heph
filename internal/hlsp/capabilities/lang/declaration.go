@@ -76,8 +76,15 @@ func extractLocation(manager *runtime.Manager, uri string, pos *protocol.Positio
 				continue
 			}
 
-			if current.Name == symbolName {
-				return buildLocationFromSymbol(doc.FullPath, current), true
+			// Check nested symbols within this hierarchy level
+			for _, sym := range current.Symbols {
+				if sym.Kind == symbol.FunctionCallKind {
+					continue
+				}
+
+				if sym.Name == symbolName {
+					return buildLocationFromSymbol(doc.FullPath, sym), true
+				}
 			}
 		}
 

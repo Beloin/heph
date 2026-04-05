@@ -2,8 +2,6 @@ package lang
 
 import (
 	"github.com/hephbuild/heph/internal/hlsp/runtime"
-	"github.com/hephbuild/heph/internal/hlsp/runtime/builtin"
-	"github.com/hephbuild/heph/internal/hlsp/runtime/document"
 	"github.com/hephbuild/heph/internal/hlsp/runtime/query"
 	"github.com/hephbuild/heph/internal/hlsp/runtime/symbol"
 	"github.com/tliron/commonlog"
@@ -21,50 +19,36 @@ func TextDocumentCompletionFuncWrapper(manager *runtime.Manager) protocol.TextDo
 			byteOffset := params.Position.IndexIn(doc.TextString)
 			offset := uint(byteOffset)
 
-			funName := doc.ExtractCurrentFunctionName(offset)
+			loc, symbolName, hierarchy := doc.SymbolHierarchyWithLocation(offset)
 
-			// If inside a target() call, use the driver-resolved schema for arg completion
-			if funName == builtin.TargetName {
-				if s := doc.QueryClosestTarget(offset); s != nil {
-					completionItems = createCompletionItemForArgs(s.Parameters, s)
-				}
-			} else { // Do not fallback to builtins
-				switch doc.WhereAmI(offset) {
-				// TODO: bsena; THIS IS NOT WORKING
-				case query.BlockLocation:
-					if s, found := doc.Query(funName); found {
-						completionItems = append(completionItems, createCompletionItemsForSymbols(s.Symbols)...)
+			// TODO: bsena; continue from here
+			// IS BROKENNNNNNNN
+			if loc == query.ArgsLocation {
+				// Find the closest function/target call in the hierarchy
+				for i := len(hierarchy) - 1; i >= 0; i-- {
+					current := hierarchy[i]
+					if current.Kind == symbol.FunctionCallKind {
+						continue
 					}
-				case query.ArgsLocation:
-					if s, found := doc.Query(funName); found {
-						completionItems = append(completionItems, createCompletionItemForArgs(s.Parameters, s)...)
+
+					// Check nested symbols within this hierarchy level
+					for _, sym := range current.Symbols {
+						if sym.Name == symbolName {
+							completionItems = createCompletionItemForArgs(sym)
+							break
+						}
 					}
 				}
 			}
 
-			// Append current doc symbols
-			for _, s := range doc.Root.Symbols {
-				compItem := createCompletionItem(s)
-				completionItems = append(completionItems, compItem)
-			}
-
-			// Complete symbols that are loaded by "load"
-			doc.RangeDocLoads(func(load *document.Load) {
-				loadDoc := load.Doc
-				if syms := loadDoc.QueryAll(load.Loads); len(syms) > 0 {
-					for _, sym := range syms {
-						compItem := createCompletionItem(sym)
-						completionItems = append(completionItems, compItem)
-					}
+			// Add completion items for each symbol in hierarchy
+			// Ignoring function calls
+			for i := len(hierarchy) - 1; i >= 0; i-- {
+				current := hierarchy[i]
+				if len(current.Symbols) > 0 {
+					completionItems = append(completionItems, createCompletionItemsForSymbols(current.Symbols)...)
 				}
-			})
-		}
-
-		// Load Builtin
-		allPerKind := manager.BuiltinSymbols
-		for _, symbol := range allPerKind {
-			compItem := createCompletionItem(symbol)
-			completionItems = append(completionItems, compItem)
+			}
 		}
 
 		return completionItems, nil
@@ -90,14 +74,20 @@ func createCompletionItem(symbol *symbol.Symbol) protocol.CompletionItem {
 func createCompletionItemsForSymbols(syms []*symbol.Symbol) []protocol.CompletionItem {
 	items := []protocol.CompletionItem{}
 	for _, s := range syms {
+		if s.Kind == symbol.FunctionCallKind ||
+			s.Kind == symbol.TargetCallKind ||
+			s.Kind == symbol.RootKind {
+			continue
+		}
+
 		items = append(items, createCompletionItem(s))
 	}
 	return items
 }
 
-func createCompletionItemForArgs(args []*symbol.Parameter, s *symbol.Symbol) []protocol.CompletionItem {
+func createCompletionItemForArgs(s *symbol.Symbol) []protocol.CompletionItem {
 	completionItems := []protocol.CompletionItem{}
-	for _, arg := range args {
+	for _, arg := range s.Parameters {
 		kind := protocol.CompletionItemKindVariable
 
 		label := arg.Name + "="

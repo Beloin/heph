@@ -2,8 +2,7 @@ package query
 
 import (
 	"errors"
-	"maps"
-	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/hephbuild/heph/internal/hlsp/runtime/symbol"
@@ -11,292 +10,62 @@ import (
 	tree_sitter_python "github.com/tree-sitter/tree-sitter-python/bindings/go"
 )
 
-// Examples in https://github.com/tree-sitter/go-tree-sitter/blob/master/query_test.go
-
-const functionQuery = `
-(function_definition
-  name: (identifier) @function.name
-	parameters: (parameters
-			[
-				(identifier) @function.param
-				(default_parameter ( (identifier) @function.param . (_) @function.param.value ))
-				(typed_parameter (identifier) @function.param (type (_) @function.param.type))
-				(typed_default_parameter ( ((identifier) @function.param) . (type (_) @function.param.type) . ((_) @function.param.value) ))
-				(list_splat_pattern (identifier) @function.param)
-				(dictionary_splat_pattern (identifier) @function.param)
-			]
-	)? @function.params
-  body: (block .
-     (expression_statement
-      (string (string_content) )) @function.docstring)?)
-`
-
-const variablesQuery = `
-(
- ((comment) @var.comment)? .
- (expression_statement
-	(assignment
-		left: (identifier) @var.name
-		right: (_) @var.value
-		))
-)
-`
-
-// TODO: bsena; Also extract struct like expressions so you can match them
-// this will also be helpfull with heph.obj.otherfn
-// And also wil be helpfull with new driver providers
-// They are object:
-//   (expression_statement ; [31, 0] - [31, 5]
-// (attribute ; [31, 0] - [31, 5]
-//   object: (attribute ; [31, 0] - [31, 3]
-//     object: (identifier) ; [31, 0] - [31, 1]
-//     attribute: (identifier)) ; [31, 2] - [31, 3]
-//   attribute: (identifier)))) ; [31, 4] - [31, 5]
-//
-
 var ErrEmptyTreeError = errors.New("empty tree")
 
 var lang = tree_sitter.NewLanguage(tree_sitter_python.Language())
 
-// TODO: Maybe create a query that query all symbols of type object
-// so we can match heph.myfun
-
-// QueryResult holds the three categories of symbols extracted from a tree.
-type QueryResult struct {
-	Functions []*symbol.Symbol
-	Variables []*symbol.Symbol
-	Calls     []*symbol.Symbol
-}
-
-// QueryAll extracts functions, variables, and calls in one pass, with full
-// scope awareness: variables and calls inside a function body are attached to
-// that function's Symbols field.
-func QueryAll(tree *tree_sitter.Tree, text []byte, source string) (*QueryResult, error) {
-	funs, err := ExtractFunctions(tree, text, source)
-	if err != nil {
-		return nil, err
-	}
-
-	vars, err := ExtractVariables(tree, text, source, funs)
-	if err != nil {
-		return nil, err
-	}
-
-	calls, err := ExtractCalls(tree, text, source, funs)
-	if err != nil {
-		return nil, err
-	}
-
-	return &QueryResult{
-		Functions: funs,
-		Variables: vars,
-		Calls:     calls,
-	}, nil
-}
-
-func QuerySymbols(tree *tree_sitter.Tree, text []byte, source string) ([]*symbol.Symbol, error) {
-	result, err := QueryAll(tree, text, source)
-	if err != nil {
-		return nil, err
-	}
-
-	return append(result.Functions, result.Variables...), nil
-}
-
-// Necessary to do a re-run to get functions that are nested.
-type funcEntry struct {
-	sym     *symbol.Symbol
-	defNode *tree_sitter.Node
-}
-
-// ExtractFunctions extracts function symbols from the tree.
-// Nested functions (functions defined inside another function) are attached to
-// their parent function's Symbols field rather than returned at the top level.
-func ExtractFunctions(tree *tree_sitter.Tree, text []byte, source string) ([]*symbol.Symbol, error) {
+func QueryAll(tree *tree_sitter.Tree, text []byte, source string) (*symbol.Symbol, error) {
 	if tree.RootNode() == nil {
 		return nil, ErrEmptyTreeError
 	}
 
-	query, err := tree_sitter.NewQuery(lang, functionQuery)
-	if err != nil {
-		return nil, err
-	}
+	rootScope := &symbol.Symbol{Kind: symbol.RootKind, Source: source}
+	processScope(tree.RootNode(), text, rootScope)
 
-	defer query.Close()
-
-	cursor := tree_sitter.NewQueryCursor()
-	defer cursor.Close()
-
-	matches := cursor.Matches(query, tree.RootNode(), text)
-
-	entries := map[uintptr]*funcEntry{}
-
-	for match := matches.Next(); match != nil; match = matches.Next() {
-		currEntry := &funcEntry{sym: &symbol.Symbol{Kind: symbol.FunctionKind, Source: source}}
-		var currParam *symbol.Parameter
-		for _, capture := range match.Captures {
-			currentNode := &capture.Node
-			patternName := query.CaptureNames()[capture.Index]
-			nodeRange := currentNode.Range()
-			patternValue := currentNode.Utf8Text(text)
-
-			switch patternName {
-			case "function.name":
-				// Params query repeats Captures. We use Function Name as id so we dont need to make multiple queries
-				if e, ok := entries[currentNode.Id()]; ok {
-					e.sym.Parameters = append(e.sym.Parameters, currEntry.sym.Parameters...)
-					currEntry = e
-				}
-
-				// First capture group
-				currEntry.sym.Position.RowStart = nodeRange.StartPoint.Row
-				currEntry.sym.Position.ColumnStart = nodeRange.StartPoint.Column
-				currEntry.sym.Position.ByteStart = nodeRange.StartByte
-
-				currEntry.sym.Name = patternValue
-				currEntry.sym.Signature = patternValue + "()" // empty params is the default
-				currEntry.sym.FullyQualifiedName = patternValue
-				currEntry.defNode = currentNode.Parent() // function_definition
-
-				entries[currentNode.Id()] = currEntry
-			case "function.params":
-				currEntry.sym.Signature = currEntry.sym.Name + patternValue
-			case "function.param":
-				currParam = &symbol.Parameter{Name: patternValue}
-				currEntry.sym.Parameters = append(currEntry.sym.Parameters, currParam)
-			case "function.param.type":
-				if currParam != nil {
-					if t := ResolveType(patternValue); t != nil {
-						currParam.Type = t
-					} else {
-						currParam.Type = &symbol.Symbol{Name: patternValue}
-					}
-				}
-			case "function.param.value":
-				if currParam != nil {
-					currParam.Value = patternValue
-				}
-			case "function.docstring":
-				currEntry.sym.DocString = sanitizeComment(patternValue)
-
-				// Last capture group
-				currEntry.sym.Position.RowEnd = nodeRange.EndPoint.Row
-				currEntry.sym.Position.ColumnEnd = nodeRange.EndPoint.Column
-				currEntry.sym.Position.ByteEnd = nodeRange.EndByte
-			}
-		}
-
-		parseArgsFromDocstring(currEntry.sym.DocString, currEntry.sym.Parameters)
-	}
-
-	// Build a name->entry map for parent lookup.
-	entryByName := map[string]*funcEntry{}
-	for _, e := range entries {
-		entryByName[e.sym.Name] = e
-	}
-
-	// Second pass: attach nested functions to their parent's Symbols.
-	topLevel := []*symbol.Symbol{}
-	for _, entry := range slices.Collect(maps.Values(entries)) {
-		parentNameNode := getFunctionNameNodeIfExists(entry.defNode.Parent())
-		if parentNameNode == nil {
-			topLevel = append(topLevel, entry.sym)
-			continue
-		}
-
-		parentName := parentNameNode.Utf8Text(text)
-		if parentEntry, ok := entryByName[parentName]; ok {
-			parentEntry.sym.Symbols = append(parentEntry.sym.Symbols, entry.sym)
-		} else {
-			topLevel = append(topLevel, entry.sym)
-		}
-	}
-
-	return topLevel, nil
+	return rootScope, nil
 }
 
-func ExtractVariables(tree *tree_sitter.Tree, text []byte, source string, funs []*symbol.Symbol) ([]*symbol.Symbol, error) {
-	root := tree.RootNode()
-	if root == nil {
-		return nil, ErrEmptyTreeError
-	}
-
-	query, err := tree_sitter.NewQuery(lang, variablesQuery)
-	if err != nil {
-		return nil, err
-	}
-
-	defer query.Close()
-
-	cursor := tree_sitter.NewQueryCursor()
-	defer cursor.Close()
-
-	vars := []*symbol.Symbol{}
-	matches := cursor.Matches(query, root, text)
-	for match := matches.Next(); match != nil; match = matches.Next() {
-
-		currSymbol := &symbol.Symbol{Kind: symbol.VariableKind, Source: source}
-		var lastNode *tree_sitter.Node
-
-		for _, capture := range match.Captures {
-			patternName := query.CaptureNames()[capture.Index]
-			node := &capture.Node
-			lastNode = node
-
-			patternValue := node.Utf8Text(text)
-			nodeRange := node.Range()
-
-			switch patternName {
-			case "var.name":
-				// First capture group
-				currSymbol.Position.RowStart = nodeRange.StartPoint.Row
-				currSymbol.Position.ColumnStart = nodeRange.StartPoint.Column
-				currSymbol.Position.ByteStart = nodeRange.StartByte
-
-				currSymbol.Name = patternValue
-				currSymbol.Signature = patternValue
-				currSymbol.FullyQualifiedName = patternValue
-			case "var.comment":
-				currSymbol.DocString = sanitizeComment(patternValue)
-			case "var.value":
-				currSymbol.Type = ResolveType(node.Kind())
-				currSymbol.Value = patternValue
-
-				// Last capture group — set position then check for enclosing function.
-				currSymbol.Position.RowEnd = nodeRange.EndPoint.Row
-				currSymbol.Position.ColumnEnd = nodeRange.EndPoint.Column
-				currSymbol.Position.ByteEnd = nodeRange.EndByte
-			}
-		}
-
-		if funNode := getFunctionNameNodeIfExists(lastNode); funNode != nil {
-			funcName := funNode.Utf8Text(text)
-			if fn, found := symbol.FindSymbol(funs, funcName); found {
-				fn.Symbols = append(fn.Symbols, currSymbol)
-			}
-		} else {
-			vars = append(vars, currSymbol)
+func FilterSymbolsByKind(symbols []*symbol.Symbol, kind symbol.SymbolKind) []*symbol.Symbol {
+	var result []*symbol.Symbol
+	for _, s := range symbols {
+		if s.Kind == kind {
+			result = append(result, s)
 		}
 	}
-
-	return vars, nil
+	return result
 }
 
-func getFunctionNameNodeIfExists(node *tree_sitter.Node) *tree_sitter.Node {
-	for funNode := node; funNode.Parent() != nil; funNode = funNode.Parent() {
-		if funNode.Kind() != "function_definition" {
-			continue
-		}
-
-		nameNode := funNode.ChildByFieldName("name")
-		if nameNode == nil {
-			break
-		}
-
-		return nameNode
+func extractDocstring(node *tree_sitter.Node, text []byte) string {
+	bodyNode := node.ChildByFieldName("body")
+	if bodyNode == nil || bodyNode.ChildCount() == 0 {
+		return ""
 	}
 
-	return nil
+	firstStmt := bodyNode.Child(0)
+	if firstStmt == nil || firstStmt.Kind() != "expression_statement" {
+		return ""
+	}
+
+	if firstStmt.ChildCount() == 0 {
+		return ""
+	}
+
+	firstExpr := firstStmt.Child(0)
+	if firstExpr == nil || firstExpr.Kind() != "string" {
+		return ""
+	}
+
+	if firstExpr.ChildCount() < 2 {
+		return ""
+	}
+
+	content := firstExpr.Child(1)
+	if content == nil {
+		return ""
+	}
+
+	doc := string(content.Utf8Text(text))
+	return sanitizeComment(doc)
 }
 
 func sanitizeComment(cmmt string) string {
@@ -340,6 +109,8 @@ func parseArgsFromDocstring(docstring string, params []*symbol.Parameter) {
 			if len(parts) == 2 {
 				namePart := strings.TrimSpace(parts[0])
 				desc := strings.TrimSpace(parts[1])
+
+				// If has type definition e.g param1 (int): My integer
 				if idx := strings.Index(namePart, " ("); idx > 0 {
 					paramName := namePart[:idx]
 					for _, p := range params {
@@ -348,8 +119,436 @@ func parseArgsFromDocstring(docstring string, params []*symbol.Parameter) {
 							break
 						}
 					}
+				} else {
+					for _, p := range params {
+						if p.Name == namePart {
+							p.DocString = desc
+							break
+						}
+					}
 				}
 			}
 		}
 	}
+}
+
+func processScope(node *tree_sitter.Node, text []byte, parentSym *symbol.Symbol) {
+	statements := getStatements(node)
+	for _, stmt := range statements {
+		switch stmt.Kind() {
+		case "function_definition":
+			processFunctionDefinition(stmt, text, parentSym)
+		case "expression_statement":
+			processExpressionStatement(stmt, text, parentSym)
+		}
+	}
+}
+
+// getStatements get first row statements
+func getStatements(node *tree_sitter.Node) []*tree_sitter.Node {
+	var statements []*tree_sitter.Node
+
+	if node.Kind() == "module" || node.Kind() == "block" {
+		count := node.ChildCount()
+		for i := range count {
+			child := node.Child(i)
+			if child != nil {
+				statements = append(statements, child)
+			}
+		}
+	}
+
+	return statements
+}
+
+func processFunctionDefinition(node *tree_sitter.Node, text []byte, parentSym *symbol.Symbol) {
+	nameNode := node.ChildByFieldName("name")
+	if nameNode == nil {
+		return
+	}
+
+	nodeRange := node.Range()
+	nameText := nameNode.Utf8Text(text)
+
+	fn := &symbol.Symbol{
+		Kind:               symbol.FunctionKind,
+		Name:               nameText,
+		FullyQualifiedName: nameText,
+		Signature:          nameText + "()",
+		Source:             parentSym.Source,
+		Parent:             parentSym,
+		Position: symbol.Position{
+			RowStart:    nodeRange.StartPoint.Row,
+			ColumnStart: nodeRange.StartPoint.Column,
+			RowEnd:      nodeRange.EndPoint.Row,
+			ColumnEnd:   nodeRange.EndPoint.Column,
+			ByteStart:   nodeRange.StartByte,
+			ByteEnd:     nodeRange.EndByte,
+		},
+	}
+
+	fn.Parameters = extractParameters(node, text, parentSym)
+	fn.DocString = extractDocstring(node, text)
+	parseArgsFromDocstring(fn.DocString, fn.Parameters)
+
+	bodyNode := node.ChildByFieldName("body")
+	if bodyNode != nil {
+		processScope(bodyNode, text, fn)
+	}
+
+	parentSym.Symbols = append(parentSym.Symbols, fn)
+}
+
+func extractParameters(node *tree_sitter.Node, text []byte, scope *symbol.Symbol) []*symbol.Parameter {
+	paramsNode := node.ChildByFieldName("parameters")
+	if paramsNode == nil {
+		return nil
+	}
+
+	var params []*symbol.Parameter
+	count := paramsNode.NamedChildCount()
+	for i := range count {
+		paramNode := paramsNode.NamedChild(i)
+		if paramNode == nil {
+			continue
+		}
+
+		param := &symbol.Parameter{}
+		kind := paramNode.Kind()
+		switch kind {
+		case "identifier":
+			param.Name = paramNode.Utf8Text(text)
+		case "default_parameter":
+			if nameNode := paramNode.ChildByFieldName("name"); nameNode != nil {
+				param.Name = nameNode.Utf8Text(text)
+			} else if child := paramNode.Child(0); child != nil {
+				param.Name = child.Utf8Text(text)
+			}
+			if valueNode := paramNode.ChildByFieldName("value"); valueNode != nil {
+				param.Value = resolveValue(valueNode, text, scope)
+			}
+		case "typed_parameter":
+			if nameNode := paramNode.ChildByFieldName("name"); nameNode != nil {
+				param.Name = nameNode.Utf8Text(text)
+			} else if child := paramNode.Child(0); child != nil && child.Kind() == "identifier" {
+				param.Name = child.Utf8Text(text)
+			}
+			if typeNode := paramNode.ChildByFieldName("type"); typeNode != nil {
+				param.Type = resolveType(typeNode.Utf8Text(text))
+			}
+		case "typed_default_parameter":
+			if nameNode := paramNode.ChildByFieldName("name"); nameNode != nil {
+				param.Name = nameNode.Utf8Text(text)
+			} else if child := paramNode.Child(0); child != nil && child.Kind() == "identifier" {
+				param.Name = child.Utf8Text(text)
+			}
+
+			if typeNode := paramNode.ChildByFieldName("type"); typeNode != nil {
+				param.Type = resolveType(typeNode.Utf8Text(text))
+			}
+
+			if valueNode := paramNode.ChildByFieldName("value"); valueNode != nil {
+				param.Value = resolveValue(valueNode, text, scope)
+			}
+		case "list_splat_pattern":
+			if child := paramNode.Child(0); child != nil {
+				param.Name = child.Utf8Text(text)
+			}
+		case "dictionary_splat_pattern":
+			if child := paramNode.Child(0); child != nil {
+				param.Name = child.Utf8Text(text)
+			}
+		}
+
+		if param.Name != "" {
+			params = append(params, param)
+		}
+	}
+
+	return params
+}
+
+// resolveType resolves a type annotation string to a Symbol.
+// For simple types (int, str), returns primitive sentinel.
+// For complex types (List[str]), creates a temporary symbol.
+// For user-defined types, searches scope chain.
+func resolveType(typeStr string) *symbol.Symbol {
+	// First check primitives
+	switch typeStr {
+	case "int":
+		return symbol.PrimitiveInt
+	case "float":
+		return symbol.PrimitiveFloat
+	case "bool":
+		return symbol.PrimitiveBool
+	case "str", "string":
+		return symbol.PrimitiveString
+	case "list":
+		return symbol.ListType
+	case "dict":
+		return symbol.DictType
+	}
+
+	// We can include more types with generics etc
+	// For now, create a placeholder symbol
+	return &symbol.Symbol{Name: typeStr, Kind: symbol.PrimitiveKind}
+}
+
+// resolveValue resolves a default value or argument to a Symbol.
+// For literals, creates a new Symbol with appropriate Kind.
+// For references (identifiers, calls), resolves from scope.
+func resolveValue(node *tree_sitter.Node, text []byte, scope *symbol.Symbol) *symbol.Symbol {
+	symVal := node.Utf8Text(text)
+	switch node.Kind() {
+	case "string":
+		return &symbol.Symbol{Kind: symbol.PrimitiveKind, Value: symVal, Type: symbol.PrimitiveString}
+	case "integer":
+		return &symbol.Symbol{Kind: symbol.PrimitiveKind, Value: symVal, Type: symbol.PrimitiveInt}
+	case "float":
+		return &symbol.Symbol{Kind: symbol.PrimitiveKind, Value: symVal, Type: symbol.PrimitiveFloat}
+	case "true", "false":
+		return &symbol.Symbol{Kind: symbol.PrimitiveKind, Value: symVal, Type: symbol.PrimitiveBool}
+	case "list":
+		return &symbol.Symbol{Kind: symbol.PrimitiveKind, Value: symVal, Type: symbol.ListType}
+	case "dictionary":
+		return &symbol.Symbol{Kind: symbol.PrimitiveKind, Value: symVal, Type: symbol.DictType}
+	case "identifier":
+		name := node.Utf8Text(text)
+		if found := findSymbolInParentChain(scope, name); found != nil {
+			return found
+		}
+
+		return &symbol.Symbol{Name: name, Kind: symbol.VariableKind, Type: symbol.UnknownType}
+	case "call":
+		return &symbol.Symbol{Kind: symbol.FunctionCallKind, Value: symVal}
+	default:
+		return &symbol.Symbol{Kind: symbol.ValueKind, Value: symVal, Type: symbol.UnknownType}
+	}
+}
+
+func processExpressionStatement(stmt *tree_sitter.Node, text []byte, parentSym *symbol.Symbol) {
+	childCount := stmt.ChildCount()
+	for i := range childCount {
+		child := stmt.Child(i)
+		if child == nil {
+			continue
+		}
+
+		switch child.Kind() {
+		case "assignment":
+			processAssignment(child, text, parentSym)
+		case "call":
+			processCall(child, text, parentSym)
+		}
+	}
+}
+
+func processAssignment(node *tree_sitter.Node, text []byte, parentSym *symbol.Symbol) {
+	leftNode := node.ChildByFieldName("left")
+	rightNode := node.ChildByFieldName("right")
+
+	if leftNode == nil {
+		return
+	}
+
+	nodeRange := node.Range()
+	nameText := leftNode.Utf8Text(text)
+
+	v := &symbol.Symbol{
+		Kind:               symbol.VariableKind,
+		Name:               nameText,
+		FullyQualifiedName: nameText,
+		Signature:          nameText,
+		Source:             parentSym.Source,
+		Parent:             parentSym,
+		Position: symbol.Position{
+			RowStart:    nodeRange.StartPoint.Row,
+			ColumnStart: nodeRange.StartPoint.Column,
+			RowEnd:      nodeRange.EndPoint.Row,
+			ColumnEnd:   nodeRange.EndPoint.Column,
+			ByteStart:   nodeRange.StartByte,
+			ByteEnd:     nodeRange.EndByte,
+		},
+	}
+
+	if rightNode != nil {
+		v.Value = rightNode.Utf8Text(text)
+		v.Type = inferTypeSymbol(rightNode, text, parentSym)
+		extractCallsFromExpression(rightNode, text, parentSym)
+	}
+
+	parentSym.Symbols = append(parentSym.Symbols, v)
+}
+
+func extractCallsFromExpression(node *tree_sitter.Node, text []byte, parentSym *symbol.Symbol) {
+	if node == nil {
+		return
+	}
+
+	if node.Kind() == "call" {
+		processCall(node, text, parentSym)
+		return
+	}
+
+	for i := uint(0); i < node.ChildCount(); i++ {
+		child := node.Child(i)
+		if child != nil {
+			extractCallsFromExpression(child, text, parentSym)
+		}
+	}
+}
+
+func processCall(node *tree_sitter.Node, text []byte, parentSym *symbol.Symbol) {
+	funcNode := node.ChildByFieldName("function")
+	if funcNode == nil {
+		return
+	}
+
+	nodeRange := node.Range()
+	callName := getCallName(funcNode, text)
+
+	call := &symbol.Symbol{
+		Kind:               symbol.FunctionCallKind,
+		Name:               callName,
+		FullyQualifiedName: callName,
+		Signature:          node.Utf8Text(text),
+		Source:             parentSym.Source,
+		Position: symbol.Position{
+			RowStart:    nodeRange.StartPoint.Row,
+			ColumnStart: nodeRange.StartPoint.Column,
+			RowEnd:      nodeRange.EndPoint.Row,
+			ColumnEnd:   nodeRange.EndPoint.Column,
+			ByteStart:   nodeRange.StartByte,
+			ByteEnd:     nodeRange.EndByte,
+		},
+	}
+
+	argsNode := node.ChildByFieldName("arguments")
+	if argsNode != nil {
+		call.Parameters = extractCallArguments(argsNode, text, parentSym)
+	}
+
+	parentSym.Symbols = append(parentSym.Symbols, call)
+}
+
+func getCallName(node *tree_sitter.Node, text []byte) string {
+	if node.Kind() == "identifier" {
+		return node.Utf8Text(text)
+	}
+
+	if node.Kind() == "attribute" {
+		var parts []string
+		collectAttributeParts(node, text, &parts)
+		if len(parts) > 0 {
+			return parts[len(parts)-1]
+		}
+	}
+
+	return ""
+}
+
+func collectAttributeParts(node *tree_sitter.Node, text []byte, parts *[]string) {
+	if node.Kind() == "identifier" {
+		*parts = append(*parts, node.Utf8Text(text))
+		return
+	}
+
+	if node.Kind() == "attribute" {
+		if objNode := node.ChildByFieldName("object"); objNode != nil {
+			collectAttributeParts(objNode, text, parts)
+		}
+		if attrNode := node.ChildByFieldName("attribute"); attrNode != nil {
+			*parts = append(*parts, attrNode.Utf8Text(text))
+		}
+	}
+}
+
+func extractCallArguments(node *tree_sitter.Node, text []byte, scope *symbol.Symbol) []*symbol.Parameter {
+	count := node.NamedChildCount()
+	args := make([]*symbol.Parameter, 0, count)
+	for i := range count {
+		argNode := node.NamedChild(i)
+		if argNode == nil {
+			continue
+		}
+
+		arg := &symbol.Parameter{}
+
+		if argNode.Kind() == "keyword_argument" {
+			if nameNode := argNode.ChildByFieldName("name"); nameNode != nil {
+				arg.Name = nameNode.Utf8Text(text)
+			}
+
+			if valueNode := argNode.ChildByFieldName("value"); valueNode != nil {
+				arg.Value = resolveValue(valueNode, text, scope)
+			}
+		} else {
+			arg.Name = strconv.Itoa(int(i))
+			arg.Value = resolveValue(argNode, text, scope)
+		}
+
+		args = append(args, arg)
+	}
+
+	return args
+}
+
+func inferTypeSymbol(node *tree_sitter.Node, text []byte, sym *symbol.Symbol) *symbol.Symbol {
+	switch node.Kind() {
+	case "string":
+		return symbol.PrimitiveString
+	case "integer":
+		return symbol.PrimitiveInt
+	case "float":
+		return symbol.PrimitiveFloat
+	case "true", "false":
+		return symbol.PrimitiveBool
+	case "list":
+		return symbol.ListType
+	case "dictionary":
+		return symbol.DictType
+	case "identifier":
+		name := node.Utf8Text(text)
+		if found := findSymbolInParentChain(sym, name); found != nil {
+			return found
+		}
+		return &symbol.Symbol{Name: name, Kind: symbol.VariableKind}
+	case "call":
+		return symbol.UnknownType
+	case "attribute":
+		return &symbol.Symbol{Name: getCallName(node, text), Kind: symbol.FieldKind}
+	default:
+		return symbol.UnknownType
+	}
+}
+
+func findSymbolInParentChain(sym *symbol.Symbol, name string) *symbol.Symbol {
+	if sym == nil {
+		return nil
+	}
+
+	for _, s := range sym.Symbols {
+		if s.Name == name {
+			return s
+		}
+	}
+
+	return findSymbolInParentChain(sym.Parent, name)
+}
+
+func getFunctionNameNodeIfExists(node *tree_sitter.Node) *tree_sitter.Node {
+	for funNode := node; funNode.Parent() != nil; funNode = funNode.Parent() {
+		if funNode.Kind() != "function_definition" {
+			continue
+		}
+
+		nameNode := funNode.ChildByFieldName("name")
+		if nameNode == nil {
+			break
+		}
+
+		return nameNode
+	}
+
+	return nil
 }

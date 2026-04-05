@@ -27,6 +27,9 @@ var allDefs = []string{
 	"to_json",
 	"heph", "heph.canonicalize", "heph.is_target", "heph.split", "heph.param",
 	"heph.pkg", "heph.pkg.dir", "heph.pkg.name", "heph.pkg.addr",
+
+	// Primitive type symbols
+	"int", "float", "bool", "str", "Null", "list", "dict", "object", "unknown",
 }
 
 type BuiltinSuite struct {

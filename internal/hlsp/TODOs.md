@@ -7,11 +7,12 @@
 - [ ] Load hephconfig to really see stuff
 - [ ] All uint conversions should be validated before, use some common function
 - [X] Scope Variables
-- [ ] Scope Variables in function call
+- [X] Scope Variables in function call
 - [ ] Use chain in capabilites
-- [ ] I do not like how we use scope rn. We work with symbols and not with a real scope tree
 - [ ] Accept struct and see how to work with symbols there
 - [ ] Read the yaml to know it it will be always BUILD
+- [ ] Complete copmpletion based on new hierarchy and symopls
+- [ ] Read all files of current workdir
 
 
 
