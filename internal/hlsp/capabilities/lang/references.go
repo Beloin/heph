@@ -14,35 +14,18 @@ func TextDocumentReferencesFuncWrapper(manager *runtime.Manager) protocol.TextDo
 			pos := uint(params.Position.IndexIn(doc.TextString))
 
 			_, symbolName, hierarchy := doc.SymbolHierarchyWithLocation(pos)
-			if symbolName == "" || len(hierarchy) == 0 {
+			if symbolName == "" || len(hierarchy) <= 2 { // Needs to have at least the symbol and root
 				return nil, nil
 			}
 
 			var locations []protocol.Location
+			upperScope := hierarchy[len(hierarchy)-2]
+			locations = addScopeReferences(upperScope, symbolName)
 
-			// Get the scope where the symbol is defined
-			var definitionScope *symbol.Symbol
-			for i := len(hierarchy) - 1; i >= 0; i-- {
-				if hierarchy[i].Kind != symbol.FunctionCallKind && hierarchy[i].Kind != symbol.TargetCallKind {
-					definitionScope = hierarchy[i]
-					break
-				}
-			}
-
-			if definitionScope == nil {
-				return nil, nil
-			}
-
-			// Check if it's a root-level symbol (can be loaded by other docs)
-			isRootLevel := len(hierarchy) <= 2 // [builtins, root, ...] or [root, ...]
-
-			// Search for references within the definition scope
-			locations = append(locations, findReferencesInScope(doc.FullPath, definitionScope, symbolName)...)
-
-			// If root-level function, also search in documents that load this one
-			if isRootLevel {
-				doc.RangeIsLoadedBy(func(load *document.Load) {
-					locations = append(locations, findReferencesInScope(load.Doc.FullPath, load.Doc.Root, symbolName)...)
+			if upperScope.Kind == symbol.RootKind {
+				// Search in Doc.LoadedBy
+				doc.RangeIsLoadedBy(func(l *document.Load) {
+					locations = append(locations, addScopeReferences(l.Doc.Root, symbolName)...)
 				})
 			}
 
@@ -55,36 +38,25 @@ func TextDocumentReferencesFuncWrapper(manager *runtime.Manager) protocol.TextDo
 	}
 }
 
-func findReferencesInScope(fullPath string, scope *symbol.Symbol, symbolName string) []protocol.Location {
+func addScopeReferences(upperScope *symbol.Symbol, symName string) []protocol.Location {
 	var locations []protocol.Location
 
 	// Check if this scope uses the symbol
-	for _, sym := range scope.Symbols {
-		// Check function/target calls
-		if sym.Kind == symbol.FunctionCallKind || sym.Kind == symbol.TargetCallKind {
-			if sym.Name == symbolName {
-				locations = append(locations, symbolLocation(fullPath, sym))
+	if upperScope.Name == symName {
+		locations = append(locations, symbolLocation(upperScope.Source, upperScope))
+	}
+
+	// Check parameters
+	for _, param := range upperScope.Parameters {
+		if param.Value != nil {
+			if param.Value.Name == symName || param.Value.Value == symName {
+				locations = append(locations, symbolLocation(upperScope.Source, upperScope))
 			}
 		}
+	}
 
-		// Check parameters
-		for _, param := range sym.Parameters {
-			if param.Value != nil {
-				if param.Value.Name == symbolName || param.Value.Value == symbolName {
-					locations = append(locations, symbolLocation(fullPath, sym))
-				}
-			}
-		}
-
-		// Check symbol's value
-		if sym.Value == symbolName {
-			locations = append(locations, symbolLocation(fullPath, sym))
-		}
-
-		// Recursively search nested scopes (functions contain their own scope)
-		if sym.Kind == symbol.FunctionKind {
-			locations = append(locations, findReferencesInScope(fullPath, sym, symbolName)...)
-		}
+	for _, s := range upperScope.Symbols {
+		locations = append(locations, addScopeReferences(s, symName)...)
 	}
 
 	return locations

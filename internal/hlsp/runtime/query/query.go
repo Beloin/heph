@@ -374,7 +374,7 @@ func processAssignment(node *tree_sitter.Node, text []byte, parentSym *symbol.Sy
 	if rightNode != nil {
 		v.Value = rightNode.Utf8Text(text)
 		v.Type = inferTypeSymbol(rightNode, text, parentSym)
-		extractCallsFromExpression(rightNode, text, parentSym)
+		extractCallsFromExpression(rightNode, text, v)
 	}
 
 	parentSym.Symbols = append(parentSym.Symbols, v)
