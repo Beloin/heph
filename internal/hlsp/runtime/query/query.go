@@ -374,7 +374,8 @@ func processAssignment(node *tree_sitter.Node, text []byte, parentSym *symbol.Sy
 	if rightNode != nil {
 		v.Value = rightNode.Utf8Text(text)
 		v.Type = inferTypeSymbol(rightNode, text, parentSym)
-		extractCallsFromExpression(rightNode, text, v)
+		extractCallsFromExpression(rightNode, text, parentSym)
+		extractIdentifierRefs(rightNode, text, v, parentSym)
 	}
 
 	parentSym.Symbols = append(parentSym.Symbols, v)
@@ -394,6 +395,54 @@ func extractCallsFromExpression(node *tree_sitter.Node, text []byte, parentSym *
 		child := node.Child(i)
 		if child != nil {
 			extractCallsFromExpression(child, text, parentSym)
+		}
+	}
+}
+
+func extractIdentifierRefs(node *tree_sitter.Node, text []byte, sym *symbol.Symbol, scope *symbol.Symbol) {
+	if node == nil {
+		return
+	}
+
+	if node.Kind() == "identifier" {
+		name := node.Utf8Text(text)
+		nodeRange := node.Range()
+
+		refSym := &symbol.Symbol{
+			Name: name,
+			Kind: symbol.VariableKind,
+			Position: symbol.Position{
+				RowStart:    nodeRange.StartPoint.Row,
+				ColumnStart: nodeRange.StartPoint.Column,
+				RowEnd:      nodeRange.EndPoint.Row,
+				ColumnEnd:   nodeRange.EndPoint.Column,
+				ByteStart:   nodeRange.StartByte,
+				ByteEnd:     nodeRange.EndByte,
+			},
+		}
+
+		if found := findSymbolInParentChain(scope, name); found != nil {
+			// TODO: bsena; temporary to check call kind
+			// TODO: bsena; Create a new kind of VariableUsageKind and the other VariableAssignmentKind?
+			refSym.Kind = found.Kind
+			refSym.Type = found.Type
+			refSym.Source = found.Source
+		} else {
+			refSym.Type = symbol.UnknownType
+		}
+
+		if refSym.Kind != symbol.FunctionCallKind {
+			sym.Symbols = append(sym.Symbols, refSym)
+		}
+
+		return
+	}
+
+	for i := range node.ChildCount() {
+		child := node.Child(i)
+		// TODO: bsena; join call and variables refs
+		if child != nil && child.Kind() != "call" {
+			extractIdentifierRefs(child, text, sym, scope)
 		}
 	}
 }

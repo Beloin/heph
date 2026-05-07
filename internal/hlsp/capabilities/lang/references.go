@@ -41,12 +41,12 @@ func TextDocumentReferencesFuncWrapper(manager *runtime.Manager) protocol.TextDo
 func addScopeReferences(upperScope *symbol.Symbol, symName string) []protocol.Location {
 	var locations []protocol.Location
 
-	// Check if this scope uses the symbol
+	// Check if this symbol itself matches
 	if upperScope.Name == symName {
 		locations = append(locations, symbolLocation(upperScope.Source, upperScope))
 	}
 
-	// Check parameters
+	// Check parameters for references
 	for _, param := range upperScope.Parameters {
 		if param.Value != nil {
 			if param.Value.Name == symName || param.Value.Value == symName {
@@ -55,8 +55,10 @@ func addScopeReferences(upperScope *symbol.Symbol, symName string) []protocol.Lo
 		}
 	}
 
-	for _, s := range upperScope.Symbols {
-		locations = append(locations, addScopeReferences(s, symName)...)
+	// Check symbols in this scope
+	for _, sym := range upperScope.Symbols {
+		// Recursively search nested scopes
+		locations = append(locations, addScopeReferences(sym, symName)...)
 	}
 
 	return locations

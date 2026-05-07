@@ -335,6 +335,8 @@ func (d *Document) WhereAmI(byteOffSet uint) query.CodeLocation {
 	return query.WhereAmI(d.Tree.RootNode(), d.Text, byteOffSet)
 }
 
+// TODO: bsena; rename it to SymbolScope.
+
 // SymbolHierarchyWithLocation returns current symbol hierarchy until current node.
 // To fetch informations about other usages you need to go to each children symbol from hierarchy.
 func (d *Document) SymbolHierarchyWithLocation(byteOffSet uint) (query.CodeLocation, string, []*symbol.Symbol) {
@@ -354,7 +356,7 @@ func (d *Document) SymbolHierarchyWithLocation(byteOffSet uint) (query.CodeLocat
 	hephBuiltins := builtin.GetHephBuiltins()
 	skBuiltins := builtin.GetSKBuiltins()
 
-	builtinsArr := []*symbol.Symbol{target}
+	builtinsArr := []*symbol.Symbol{}
 	builtinsArr = append(builtinsArr, skBuiltins...)
 	builtinsArr = append(builtinsArr, helpers...)
 	builtinsArr = append(builtinsArr, hephBuiltins...)

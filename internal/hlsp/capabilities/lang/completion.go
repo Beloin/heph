@@ -21,8 +21,8 @@ func TextDocumentCompletionFuncWrapper(manager *runtime.Manager) protocol.TextDo
 
 			loc, symbolName, hierarchy := doc.SymbolHierarchyWithLocation(offset)
 
-			// TODO: bsena; continue from here
-			// IS BROKENNNNNNNN
+			// TODO: bsena; when is target(driver="") -> show available drivers
+
 			if loc == query.ArgsLocation {
 				// Find the closest function/target call in the hierarchy
 				for i := len(hierarchy) - 1; i >= 0; i-- {
